@@ -1,15 +1,17 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     routing::{get, post},
     Json, Router,
 };
 use chrono::Datelike;
-use sqlx::SqlitePool;
+use crate::access::{verify_company_access, verify_fiscal_year_access};
+use crate::auth::middleware::AuthUser;
+use crate::config::AppState;
 
 use crate::error::AppError;
 use crate::models::fiscal_year::{CreateFiscalYear, FiscalYear};
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
             "/companies/{company_id}/fiscal-years",
@@ -19,14 +21,17 @@ pub fn routes() -> Router<SqlitePool> {
 }
 
 async fn create_fiscal_year(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(company_id): Path<String>,
     Json(input): Json<CreateFiscalYear>,
 ) -> Result<Json<FiscalYear>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "member").await?;
+
     // Verify company exists
     let exists = sqlx::query_scalar::<_, i32>("SELECT COUNT(*) FROM companies WHERE id = ?")
         .bind(&company_id)
-        .fetch_one(&pool)
+        .fetch_one(&state.pool)
         .await?;
     if exists == 0 {
         return Err(AppError::NotFound(format!(
@@ -65,32 +70,38 @@ async fn create_fiscal_year(
     .bind(&fy.start_date)
     .bind(&fy.end_date)
     .bind(&fy.created_at)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     Ok(Json(fy))
 }
 
 async fn list_fiscal_years(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(company_id): Path<String>,
 ) -> Result<Json<Vec<FiscalYear>>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "viewer").await?;
+
     let years = sqlx::query_as::<_, FiscalYear>(
         "SELECT * FROM fiscal_years WHERE company_id = ? ORDER BY start_date DESC",
     )
     .bind(&company_id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
     Ok(Json(years))
 }
 
 async fn get_fiscal_year(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
 ) -> Result<Json<FiscalYear>, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &id, "viewer").await?;
+
     let fy = sqlx::query_as::<_, FiscalYear>("SELECT * FROM fiscal_years WHERE id = ?")
         .bind(&id)
-        .fetch_optional(&pool)
+        .fetch_optional(&state.pool)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Fiscal year {id} not found")))?;
     Ok(Json(fy))

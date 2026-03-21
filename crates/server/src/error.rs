@@ -16,6 +16,9 @@ pub enum AppError {
     #[error("Voucher not balanced: debit {debit} != credit {credit}")]
     UnbalancedVoucher { debit: String, credit: String },
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Fiscal year is closed")]
     FiscalYearClosed,
 
@@ -31,6 +34,7 @@ impl IntoResponse for AppError {
         let (status, message) = match &self {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),
             AppError::UnbalancedVoucher { debit, credit } => (
                 StatusCode::BAD_REQUEST,
                 format!("Voucher not balanced: debit {debit} != credit {credit}"),

@@ -1,24 +1,27 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     routing::{get, post},
     Json, Router,
 };
 use chrono::Utc;
-use sqlx::SqlitePool;
+use crate::config::AppState;
 
+use crate::access::verify_company_access;
+use crate::auth::middleware::AuthUser;
 use crate::db::seed::seed_bas_accounts;
 use crate::error::AppError;
 use crate::models::company::{Company, CreateCompany, UpdateCompany};
 use crate::validation::validate_organisationsnummer;
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/companies", post(create_company).get(list_companies))
         .route("/companies/{id}", get(get_company).put(update_company))
 }
 
 async fn create_company(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Json(input): Json<CreateCompany>,
 ) -> Result<Json<Company>, AppError> {
     // Validate org number
@@ -57,14 +60,26 @@ async fn create_company(
     .bind(&company.city)
     .bind(&company.created_at)
     .bind(&company.updated_at)
-    .execute(&pool)
+    .execute(&state.pool)
+    .await?;
+
+    // Auto-add creator as owner
+    let now = Utc::now().to_rfc3339();
+    sqlx::query(
+        "INSERT INTO user_companies (user_id, company_id, role, created_at)
+         VALUES (?, ?, 'owner', ?)",
+    )
+    .bind(&auth.0.sub)
+    .bind(&company.id)
+    .bind(&now)
+    .execute(&state.pool)
     .await?;
 
     // Seed BAS kontoplan for the new company
-    seed_bas_accounts(&pool, &company.id).await?;
+    seed_bas_accounts(&state.pool, &company.id).await?;
 
     crate::db::audit::log_action(
-        &pool,
+        &state.pool,
         "company",
         &company.id,
         "create",
@@ -77,34 +92,55 @@ async fn create_company(
 }
 
 async fn list_companies(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
 ) -> Result<Json<Vec<Company>>, AppError> {
-    let companies = sqlx::query_as::<_, Company>("SELECT * FROM companies ORDER BY name")
-        .fetch_all(&pool)
-        .await?;
+    // Admins see all companies; others see only their own
+    let companies = if auth.0.role == "admin" {
+        sqlx::query_as::<_, Company>("SELECT * FROM companies ORDER BY name")
+            .fetch_all(&state.pool)
+            .await?
+    } else {
+        sqlx::query_as::<_, Company>(
+            "SELECT c.* FROM companies c
+             JOIN user_companies uc ON uc.company_id = c.id
+             WHERE uc.user_id = ?
+             ORDER BY c.name",
+        )
+        .bind(&auth.0.sub)
+        .fetch_all(&state.pool)
+        .await?
+    };
+
     Ok(Json(companies))
 }
 
 async fn get_company(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
 ) -> Result<Json<Company>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &id, "viewer").await?;
+
     let company = sqlx::query_as::<_, Company>("SELECT * FROM companies WHERE id = ?")
         .bind(&id)
-        .fetch_optional(&pool)
+        .fetch_optional(&state.pool)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Company {id} not found")))?;
     Ok(Json(company))
 }
 
 async fn update_company(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
     Json(input): Json<UpdateCompany>,
 ) -> Result<Json<Company>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &id, "admin").await?;
+
     let existing = sqlx::query_as::<_, Company>("SELECT * FROM companies WHERE id = ?")
         .bind(&id)
-        .fetch_optional(&pool)
+        .fetch_optional(&state.pool)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Company {id} not found")))?;
 
@@ -123,12 +159,12 @@ async fn update_company(
     .bind(&city)
     .bind(&now)
     .bind(&id)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     let company = sqlx::query_as::<_, Company>("SELECT * FROM companies WHERE id = ?")
         .bind(&id)
-        .fetch_one(&pool)
+        .fetch_one(&state.pool)
         .await?;
 
     Ok(Json(company))

@@ -1,15 +1,17 @@
 use axum::{
     body::Body,
-    extract::{Multipart, Path, State},
+    extract::{Extension, Multipart, Path, State},
     http::{header, StatusCode},
     response::Response,
     routing::{get, post},
     Json, Router,
 };
 use rust_decimal::Decimal;
-use sqlx::SqlitePool;
+use crate::config::AppState;
 use uuid::Uuid;
 
+use crate::access::{verify_company_access, verify_fiscal_year_access};
+use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
 use crate::money::Money;
 use crate::sie::{
@@ -19,7 +21,7 @@ use crate::sie::{
 };
 use crate::validation::account_type_from_number;
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/companies/{company_id}/sie/preview", post(preview_import))
         .route("/companies/{company_id}/sie/import", post(import_sie))
@@ -31,10 +33,12 @@ pub fn routes() -> Router<SqlitePool> {
 
 /// Upload a SIE file and get a preview of what will be imported.
 async fn preview_import(
-    State(_pool): State<SqlitePool>,
-    Path(_company_id): Path<String>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+    Path(company_id): Path<String>,
     mut multipart: Multipart,
 ) -> Result<Json<SieImportPreview>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "viewer").await?;
     let bytes = extract_file_bytes(&mut multipart).await?;
     let file = parse_sie(&bytes).map_err(|e| AppError::Validation(e.to_string()))?;
     Ok(Json(SieImportPreview::from(&file)))
@@ -42,23 +46,25 @@ async fn preview_import(
 
 /// Import a SIE file into the database.
 async fn import_sie(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(company_id): Path<String>,
     mut multipart: Multipart,
 ) -> Result<Json<ImportResult>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "member").await?;
     // Verify company exists
     sqlx::query_as::<_, crate::models::company::Company>(
         "SELECT * FROM companies WHERE id = ?",
     )
     .bind(&company_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound(format!("Company {company_id} not found")))?;
 
     let bytes = extract_file_bytes(&mut multipart).await?;
     let file = parse_sie(&bytes).map_err(|e| AppError::Validation(e.to_string()))?;
 
-    let mut tx = pool.begin().await?;
+    let mut tx = state.pool.begin().await?;
 
     // Import accounts (merge with existing — skip duplicates)
     let mut accounts_imported = 0;
@@ -210,9 +216,11 @@ async fn import_sie(
 
 /// Export SIE file for a fiscal year.
 async fn export_sie(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path((fy_id, sie_type_str)): Path<(String, String)>,
 ) -> Result<Response, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
     let sie_type = match sie_type_str.as_str() {
         "1" => SieType::Type1,
         "4" => SieType::Type4,
@@ -228,7 +236,7 @@ async fn export_sie(
         "SELECT * FROM fiscal_years WHERE id = ?",
     )
     .bind(&fy_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound(format!("Fiscal year {fy_id} not found")))?;
 
@@ -237,7 +245,7 @@ async fn export_sie(
         "SELECT * FROM companies WHERE id = ?",
     )
     .bind(&fy.company_id)
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await?;
 
     // Fetch accounts
@@ -245,7 +253,7 @@ async fn export_sie(
         "SELECT * FROM accounts WHERE company_id = ? ORDER BY number",
     )
     .bind(&fy.company_id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
     let account_tuples: Vec<(i32, String, Option<String>)> = accounts
@@ -266,7 +274,7 @@ async fn export_sie(
          ORDER BY vl.account_number",
     )
     .bind(&fy_id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
     let closing_balances: Vec<(i32, Decimal)> = balance_rows
@@ -295,7 +303,7 @@ async fn export_sie(
                 "SELECT * FROM vouchers WHERE fiscal_year_id = ? ORDER BY voucher_number",
             )
             .bind(&fy_id)
-            .fetch_all(&pool)
+            .fetch_all(&state.pool)
             .await?;
 
             let mut sie_vouchers = Vec::new();
@@ -304,7 +312,7 @@ async fn export_sie(
                     "SELECT * FROM voucher_lines WHERE voucher_id = ? ORDER BY rowid",
                 )
                 .bind(&v.id)
-                .fetch_all(&pool)
+                .fetch_all(&state.pool)
                 .await?;
 
                 let sie_lines: Vec<SieTransaction> = lines

@@ -1,5 +1,5 @@
 import { get, post, put, del } from './client';
-import type { AuthResponse, UserInfo } from './types';
+import type { AuthResponse, UserInfo, AdminUser, CompanyUser, AppConfig } from './types';
 import type {
   Company,
   CreateCompany,
@@ -158,6 +158,27 @@ export const taxApi = {
     get<Ink2Data>(`/companies/${companyId}/fiscal-years/${fyId}/ink2`),
   sruDownloadUrl: (companyId: string, fyId: string) =>
     `/api/companies/${companyId}/fiscal-years/${fyId}/ink2/sru`,
+};
+
+// Admin
+export const adminApi = {
+  listUsers: () => get<AdminUser[]>('/admin/users'),
+  listPendingUsers: () => get<AdminUser[]>('/admin/users/pending'),
+  approveUser: (id: string) => put<AdminUser>(`/admin/users/${id}/approve`, {}),
+  rejectUser: (id: string) => put<AdminUser>(`/admin/users/${id}/reject`, {}),
+  activateUser: (id: string) => put<AdminUser>(`/admin/users/${id}/activate`, {}),
+  deactivateUser: (id: string) => put<AdminUser>(`/admin/users/${id}/deactivate`, {}),
+  changeUserRole: (id: string, role: string) =>
+    put<AdminUser>(`/admin/users/${id}/role`, { role }),
+  listCompanyUsers: (companyId: string) =>
+    get<CompanyUser[]>(`/admin/companies/${companyId}/users`),
+  addCompanyUser: (companyId: string, userId: string, role: string) =>
+    post<{ ok: boolean }>(`/admin/companies/${companyId}/users`, { user_id: userId, role }),
+  changeCompanyRole: (companyId: string, userId: string, role: string) =>
+    put<{ ok: boolean }>(`/admin/companies/${companyId}/users/${userId}`, { role }),
+  removeCompanyUser: (companyId: string, userId: string) =>
+    del<{ ok: boolean }>(`/admin/companies/${companyId}/users/${userId}`),
+  getConfig: () => get<AppConfig>('/admin/config'),
 };
 
 // Fixed Assets

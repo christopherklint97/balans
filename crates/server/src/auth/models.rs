@@ -9,6 +9,7 @@ pub struct User {
     pub password_hash: String,
     pub name: String,
     pub role: String,
+    pub status: String,
     pub is_active: bool,
     pub created_at: String,
     pub updated_at: String,
@@ -29,8 +30,10 @@ pub struct LoginInput {
 
 #[derive(Debug, Serialize)]
 pub struct AuthResponse {
-    pub token: String,
-    pub user: UserInfo,
+    pub token: Option<String>,
+    pub user: Option<UserInfo>,
+    pub status: String,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

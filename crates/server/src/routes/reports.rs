@@ -1,15 +1,18 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     routing::get,
     Json, Router,
 };
 use serde::Serialize;
-use sqlx::{FromRow, SqlitePool};
+use sqlx::FromRow;
+use crate::access::verify_fiscal_year_access;
+use crate::auth::middleware::AuthUser;
+use crate::config::AppState;
 
 use crate::error::AppError;
 use crate::money::Money;
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new().route(
         "/fiscal-years/{fy_id}/trial-balance",
         get(trial_balance),
@@ -34,13 +37,16 @@ struct RawTrialBalanceRow {
 }
 
 async fn trial_balance(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Json<Vec<TrialBalanceRow>>, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
     // Verify fiscal year exists
     let exists = sqlx::query_scalar::<_, i32>("SELECT COUNT(*) FROM fiscal_years WHERE id = ?")
         .bind(&fy_id)
-        .fetch_one(&pool)
+        .fetch_one(&state.pool)
         .await?;
     if exists == 0 {
         return Err(AppError::NotFound(format!(
@@ -62,7 +68,7 @@ async fn trial_balance(
          ORDER BY vl.account_number",
     )
     .bind(&fy_id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
     let result: Vec<TrialBalanceRow> = rows

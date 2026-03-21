@@ -1,10 +1,12 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     routing::{get, post},
     Json, Router,
 };
 use chrono::Utc;
-use sqlx::SqlitePool;
+use crate::access::verify_fiscal_year_access;
+use crate::auth::middleware::AuthUser;
+use crate::config::AppState;
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -12,7 +14,7 @@ use crate::models::voucher::{CreateVoucher, Voucher, VoucherLine, VoucherWithLin
 use crate::money::Money;
 use crate::validation::validate_bas_account_number;
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
             "/fiscal-years/{fy_id}/vouchers",
@@ -22,16 +24,19 @@ pub fn routes() -> Router<SqlitePool> {
 }
 
 async fn create_voucher(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
     Json(input): Json<CreateVoucher>,
 ) -> Result<Json<VoucherWithLines>, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "member").await?;
+
     // Fetch fiscal year and verify it's not closed
     let fy = sqlx::query_as::<_, crate::models::fiscal_year::FiscalYear>(
         "SELECT * FROM fiscal_years WHERE id = ?",
     )
     .bind(&fy_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound(format!("Fiscal year {fy_id} not found")))?;
 
@@ -76,7 +81,7 @@ async fn create_voucher(
         )
         .bind(&fy.company_id)
         .bind(line.account_number)
-        .fetch_one(&pool)
+        .fetch_one(&state.pool)
         .await?;
 
         if exists == 0 {
@@ -115,7 +120,7 @@ async fn create_voucher(
     }
 
     // Start transaction
-    let mut tx = pool.begin().await?;
+    let mut tx = state.pool.begin().await?;
 
     // Get next voucher number
     let next_number = sqlx::query_scalar::<_, i32>(
@@ -196,54 +201,63 @@ async fn create_voucher(
 }
 
 async fn list_vouchers(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Json<Vec<Voucher>>, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
     let vouchers = sqlx::query_as::<_, Voucher>(
         "SELECT * FROM vouchers WHERE fiscal_year_id = ? ORDER BY voucher_number",
     )
     .bind(&fy_id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
     Ok(Json(vouchers))
 }
 
 async fn get_voucher(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
 ) -> Result<Json<VoucherWithLines>, AppError> {
     let voucher = sqlx::query_as::<_, Voucher>("SELECT * FROM vouchers WHERE id = ?")
         .bind(&id)
-        .fetch_optional(&pool)
+        .fetch_optional(&state.pool)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Voucher {id} not found")))?;
+
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &voucher.fiscal_year_id, "viewer").await?;
 
     let lines = sqlx::query_as::<_, VoucherLine>(
         "SELECT * FROM voucher_lines WHERE voucher_id = ? ORDER BY rowid",
     )
     .bind(&id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
 
     Ok(Json(VoucherWithLines { voucher, lines }))
 }
 
 async fn delete_voucher(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let voucher = sqlx::query_as::<_, Voucher>("SELECT * FROM vouchers WHERE id = ?")
         .bind(&id)
-        .fetch_optional(&pool)
+        .fetch_optional(&state.pool)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Voucher {id} not found")))?;
+
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &voucher.fiscal_year_id, "member").await?;
 
     // Check fiscal year is not closed
     let fy = sqlx::query_as::<_, crate::models::fiscal_year::FiscalYear>(
         "SELECT * FROM fiscal_years WHERE id = ?",
     )
     .bind(&voucher.fiscal_year_id)
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await?;
 
     if fy.is_closed {
@@ -253,7 +267,7 @@ async fn delete_voucher(
     // CASCADE will delete voucher_lines too
     sqlx::query("DELETE FROM vouchers WHERE id = ?")
         .bind(&id)
-        .execute(&pool)
+        .execute(&state.pool)
         .await?;
 
     Ok(Json(serde_json::json!({ "deleted": true })))

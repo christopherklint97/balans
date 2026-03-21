@@ -20,12 +20,19 @@ function LoginPage() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [pendingMessage, setPendingMessage] = useState('');
 
   const loginMutation = useMutation({
     mutationFn: () => authApi.login({ email, password }),
     onSuccess: (data) => {
-      login(data.token, data.user);
-      navigate({ to: '/' });
+      if (data.status === 'pending') {
+        setPendingMessage(data.message || 'Ditt konto väntar på godkännande.');
+        return;
+      }
+      if (data.token && data.user) {
+        login(data.token, data.user);
+        navigate({ to: '/' });
+      }
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -33,8 +40,16 @@ function LoginPage() {
   const registerMutation = useMutation({
     mutationFn: () => authApi.register({ email, password, name }),
     onSuccess: (data) => {
-      login(data.token, data.user);
-      navigate({ to: '/' });
+      if (data.status === 'pending') {
+        setPendingMessage(
+          data.message || 'Registrering mottagen. Väntar på godkännande från administratör.',
+        );
+        return;
+      }
+      if (data.token && data.user) {
+        login(data.token, data.user);
+        navigate({ to: '/' });
+      }
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -42,6 +57,7 @@ function LoginPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setPendingMessage('');
     if (isRegister) {
       registerMutation.mutate();
     } else {
@@ -50,6 +66,33 @@ function LoginPage() {
   };
 
   const isPending = loginMutation.isPending || registerMutation.isPending;
+
+  if (pendingMessage) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <p className="text-2xl font-semibold tracking-tight">Balans</p>
+            <CardTitle className="text-base font-normal text-muted-foreground">
+              Väntar på godkännande
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-center">
+            <p className="text-sm text-muted-foreground">{pendingMessage}</p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPendingMessage('');
+                setIsRegister(false);
+              }}
+            >
+              Tillbaka till inloggning
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">

@@ -1,6 +1,9 @@
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/auth/context';
+import { adminApi } from '@/api/queries';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -49,6 +52,7 @@ function RootLayout() {
             <NavLink to="/tax">INK2</NavLink>
             <NavLink to="/filing">Inlämning</NavLink>
             <NavLink to="/compliance">Compliance</NavLink>
+            {user.role === 'admin' && <AdminNavLink />}
           </div>
           <div className="ml-auto flex items-center gap-3">
             <span className="text-xs text-muted-foreground">{user.name}</span>
@@ -69,6 +73,30 @@ function RootLayout() {
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function AdminNavLink() {
+  const { data: pending } = useQuery({
+    queryKey: ['admin', 'pending-users'],
+    queryFn: adminApi.listPendingUsers,
+    refetchInterval: 30000,
+  });
+
+  const count = pending?.length ?? 0;
+
+  return (
+    <Link
+      to="/admin"
+      className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground [&.active]:font-medium flex items-center gap-1"
+    >
+      Admin
+      {count > 0 && (
+        <Badge variant="destructive" className="h-5 min-w-5 px-1 text-xs">
+          {count}
+        </Badge>
+      )}
+    </Link>
   );
 }
 

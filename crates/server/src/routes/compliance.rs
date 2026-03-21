@@ -1,16 +1,19 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     routing::get,
     Json, Router,
 };
 use serde::Deserialize;
-use sqlx::{FromRow, SqlitePool};
+use sqlx::FromRow;
+use crate::config::AppState;
 
+use crate::access::verify_company_access;
+use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
 use crate::k2::eligibility::{check_eligibility, EligibilityInput, EligibilityResult};
 use crate::report::multi_year::{build_multi_year_overview, MultiYearOverview};
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
             "/companies/{company_id}/fiscal-years/{fy_id}/k2-eligibility",
@@ -32,22 +35,26 @@ struct EligibilityQuery {
 }
 
 async fn eligibility_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path((company_id, fy_id)): Path<(String, String)>,
     Query(query): Query<EligibilityQuery>,
 ) -> Result<Json<EligibilityResult>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "viewer").await?;
     let input = EligibilityInput {
         average_employees: query.average_employees,
     };
-    let result = check_eligibility(&pool, &company_id, &fy_id, &input).await?;
+    let result = check_eligibility(&state.pool, &company_id, &fy_id, &input).await?;
     Ok(Json(result))
 }
 
 async fn multi_year_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(company_id): Path<String>,
 ) -> Result<Json<MultiYearOverview>, AppError> {
-    let overview = build_multi_year_overview(&pool, &company_id).await?;
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "viewer").await?;
+    let overview = build_multi_year_overview(&state.pool, &company_id).await?;
     Ok(Json(overview))
 }
 
@@ -68,10 +75,12 @@ struct AuditEntry {
 }
 
 async fn audit_log_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(company_id): Path<String>,
     Query(query): Query<AuditLogQuery>,
 ) -> Result<Json<Vec<AuditEntry>>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "viewer").await?;
     let limit = query.limit.unwrap_or(100).min(1000);
 
     let entries = if let Some(ref entity_type) = query.entity_type {
@@ -89,7 +98,7 @@ async fn audit_log_handler(
         .bind(&company_id)
         .bind(&company_id)
         .bind(limit)
-        .fetch_all(&pool)
+        .fetch_all(&state.pool)
         .await?
     } else {
         sqlx::query_as::<_, AuditEntry>(
@@ -105,7 +114,7 @@ async fn audit_log_handler(
         .bind(&company_id)
         .bind(&company_id)
         .bind(limit)
-        .fetch_all(&pool)
+        .fetch_all(&state.pool)
         .await?
     };
 

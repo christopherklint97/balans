@@ -1,7 +1,9 @@
 // Auth
 export interface AuthResponse {
-  token: string;
-  user: UserInfo;
+  token: string | null;
+  user: UserInfo | null;
+  status: string;
+  message: string | null;
 }
 
 export interface UserInfo {
@@ -9,6 +11,31 @@ export interface UserInfo {
   email: string;
   name: string;
   role: string;
+}
+
+// Admin
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyUser {
+  user_id: string;
+  email: string;
+  name: string;
+  company_role: string;
+  system_role: string;
+}
+
+export interface AppConfig {
+  mode: string;
+  fixed_company_id: string | null;
 }
 
 export interface Company {

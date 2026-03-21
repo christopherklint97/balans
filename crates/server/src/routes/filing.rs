@@ -1,13 +1,15 @@
 use axum::{
     body::Body,
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::{header, StatusCode},
     response::Response,
     routing::{get, post},
     Json, Router,
 };
 use serde::Deserialize;
-use sqlx::SqlitePool;
+use crate::access::verify_fiscal_year_access;
+use crate::auth::middleware::AuthUser;
+use crate::config::AppState;
 
 use crate::error::AppError;
 use crate::filing::{
@@ -16,7 +18,7 @@ use crate::filing::{
 };
 use crate::report::annual_report::build_annual_report;
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
             "/fiscal-years/{fy_id}/filing/ixbrl",
@@ -34,10 +36,13 @@ pub fn routes() -> Router<SqlitePool> {
 
 /// Preview the iXBRL document metadata without downloading.
 async fn preview_ixbrl(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Json<IxbrlPreview>, AppError> {
-    let report = build_annual_report(&pool, &fy_id).await?;
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
+    let report = build_annual_report(&state.pool, &fy_id).await?;
     let ixbrl = generate_ixbrl(&report);
     let checksum = compute_checksum(&ixbrl);
 
@@ -54,10 +59,13 @@ async fn preview_ixbrl(
 
 /// Download the generated iXBRL file.
 async fn download_ixbrl(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Response, AppError> {
-    let report = build_annual_report(&pool, &fy_id).await?;
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
+    let report = build_annual_report(&state.pool, &fy_id).await?;
     let ixbrl = generate_ixbrl(&report);
 
     let filename = format!(
@@ -78,11 +86,14 @@ async fn download_ixbrl(
 
 /// Submit the annual report to Bolagsverket.
 async fn submit_filing(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
     Json(params): Json<SubmitParams>,
 ) -> Result<Json<FilingResult>, AppError> {
-    let report = build_annual_report(&pool, &fy_id).await?;
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "member").await?;
+
+    let report = build_annual_report(&state.pool, &fy_id).await?;
 
     // Verify the fiscal year is closed
     if !report.fiscal_year.is_closed {
@@ -101,7 +112,7 @@ async fn submit_filing(
 
     // Audit log
     crate::db::audit::log_action(
-        &pool,
+        &state.pool,
         "fiscal_year",
         &fy_id,
         "file_bolagsverket",

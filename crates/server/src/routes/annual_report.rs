@@ -1,12 +1,15 @@
 use axum::{
     body::Body,
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::{header, StatusCode},
     response::Response,
     routing::get,
     Json, Router,
 };
 use sqlx::SqlitePool;
+use crate::access::verify_fiscal_year_access;
+use crate::auth::middleware::AuthUser;
+use crate::config::AppState;
 
 use crate::error::AppError;
 use crate::report::annual_report::{build_annual_report, AnnualReport};
@@ -14,7 +17,7 @@ use crate::report::balance_sheet::{build_balance_sheet, BalanceSheet};
 use crate::report::income_statement::{build_income_statement, IncomeStatement};
 use crate::report::pdf::generate_pdf;
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
             "/fiscal-years/{fy_id}/income-statement",
@@ -35,36 +38,48 @@ pub fn routes() -> Router<SqlitePool> {
 }
 
 async fn income_statement_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Json<IncomeStatement>, AppError> {
-    let prev_fy_id = find_previous_fy(&pool, &fy_id).await?;
-    let is = build_income_statement(&pool, &fy_id, prev_fy_id.as_deref()).await?;
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
+    let prev_fy_id = find_previous_fy(&state.pool, &fy_id).await?;
+    let is = build_income_statement(&state.pool, &fy_id, prev_fy_id.as_deref()).await?;
     Ok(Json(is))
 }
 
 async fn balance_sheet_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Json<BalanceSheet>, AppError> {
-    let prev_fy_id = find_previous_fy(&pool, &fy_id).await?;
-    let bs = build_balance_sheet(&pool, &fy_id, prev_fy_id.as_deref()).await?;
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
+    let prev_fy_id = find_previous_fy(&state.pool, &fy_id).await?;
+    let bs = build_balance_sheet(&state.pool, &fy_id, prev_fy_id.as_deref()).await?;
     Ok(Json(bs))
 }
 
 async fn annual_report_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Json<AnnualReport>, AppError> {
-    let report = build_annual_report(&pool, &fy_id).await?;
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
+    let report = build_annual_report(&state.pool, &fy_id).await?;
     Ok(Json(report))
 }
 
 async fn annual_report_pdf_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Response, AppError> {
-    let report = build_annual_report(&pool, &fy_id).await?;
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
+    let report = build_annual_report(&state.pool, &fy_id).await?;
 
     let pdf_bytes = generate_pdf(&report).map_err(|e| AppError::Internal(e))?;
 

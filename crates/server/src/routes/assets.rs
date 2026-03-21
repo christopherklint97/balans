@@ -1,20 +1,22 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     routing::{get, post},
     Json, Router,
 };
 use chrono::Utc;
-use sqlx::SqlitePool;
+use crate::config::AppState;
 use uuid::Uuid;
 
+use crate::access::verify_company_access;
 use crate::assets::depreciation::{
     build_depreciation_summary, generate_depreciation_vouchers, DepreciationSummary,
 };
 use crate::assets::models::*;
+use crate::auth::middleware::AuthUser;
 use crate::error::AppError;
 use crate::money::Money;
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
             "/companies/{company_id}/assets",
@@ -33,23 +35,27 @@ pub fn routes() -> Router<SqlitePool> {
 }
 
 async fn list_assets(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(company_id): Path<String>,
 ) -> Result<Json<Vec<FixedAsset>>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "viewer").await?;
     let assets = sqlx::query_as::<_, FixedAsset>(
         "SELECT * FROM fixed_assets WHERE company_id = ? ORDER BY acquisition_date",
     )
     .bind(&company_id)
-    .fetch_all(&pool)
+    .fetch_all(&state.pool)
     .await?;
     Ok(Json(assets))
 }
 
 async fn create_asset(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(company_id): Path<String>,
     Json(input): Json<CreateFixedAsset>,
 ) -> Result<Json<FixedAsset>, AppError> {
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "member").await?;
     // Validate asset type
     let valid_types = [
         "intangible",
@@ -111,11 +117,11 @@ async fn create_asset(
     .bind(exp_acc)
     .bind(&now)
     .bind(&now)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     crate::db::audit::log_action(
-        &pool,
+        &state.pool,
         "asset",
         &id,
         "create",
@@ -126,34 +132,39 @@ async fn create_asset(
 
     let asset = sqlx::query_as::<_, FixedAsset>("SELECT * FROM fixed_assets WHERE id = ?")
         .bind(&id)
-        .fetch_one(&pool)
+        .fetch_one(&state.pool)
         .await?;
 
     Ok(Json(asset))
 }
 
 async fn get_asset(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
 ) -> Result<Json<FixedAsset>, AppError> {
     let asset = sqlx::query_as::<_, FixedAsset>("SELECT * FROM fixed_assets WHERE id = ?")
         .bind(&id)
-        .fetch_optional(&pool)
+        .fetch_optional(&state.pool)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Asset {id} not found")))?;
+    verify_company_access(&state.pool, &auth.0.sub, &asset.company_id, "viewer").await?;
     Ok(Json(asset))
 }
 
 async fn dispose_asset(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(id): Path<String>,
     Json(input): Json<DisposeAsset>,
 ) -> Result<Json<FixedAsset>, AppError> {
     let existing = sqlx::query_as::<_, FixedAsset>("SELECT * FROM fixed_assets WHERE id = ?")
         .bind(&id)
-        .fetch_optional(&pool)
+        .fetch_optional(&state.pool)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("Asset {id} not found")))?;
+
+    verify_company_access(&state.pool, &auth.0.sub, &existing.company_id, "member").await?;
 
     if existing.is_disposed {
         return Err(AppError::Validation("Asset already disposed".into()));
@@ -168,11 +179,11 @@ async fn dispose_asset(
     .bind(input.disposal_amount)
     .bind(&now)
     .bind(&id)
-    .execute(&pool)
+    .execute(&state.pool)
     .await?;
 
     crate::db::audit::log_action(
-        &pool,
+        &state.pool,
         "asset",
         &id,
         "dispose",
@@ -183,25 +194,29 @@ async fn dispose_asset(
 
     let asset = sqlx::query_as::<_, FixedAsset>("SELECT * FROM fixed_assets WHERE id = ?")
         .bind(&id)
-        .fetch_one(&pool)
+        .fetch_one(&state.pool)
         .await?;
 
     Ok(Json(asset))
 }
 
 async fn depreciation_summary_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path((company_id, fy_id)): Path<(String, String)>,
 ) -> Result<Json<DepreciationSummary>, AppError> {
-    let summary = build_depreciation_summary(&pool, &company_id, &fy_id).await?;
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "viewer").await?;
+    let summary = build_depreciation_summary(&state.pool, &company_id, &fy_id).await?;
     Ok(Json(summary))
 }
 
 async fn generate_depreciation_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path((company_id, fy_id)): Path<(String, String)>,
 ) -> Result<Json<GenerateResult>, AppError> {
-    let voucher_ids = generate_depreciation_vouchers(&pool, &company_id, &fy_id).await?;
+    verify_company_access(&state.pool, &auth.0.sub, &company_id, "member").await?;
+    let voucher_ids = generate_depreciation_vouchers(&state.pool, &company_id, &fy_id).await?;
     Ok(Json(GenerateResult {
         vouchers_created: voucher_ids.len(),
         voucher_ids,

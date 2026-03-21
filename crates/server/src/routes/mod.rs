@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod admin;
 pub mod annual_report;
 pub mod assets;
 pub mod closing;
@@ -12,9 +13,9 @@ pub mod tax;
 pub mod vouchers;
 
 use axum::Router;
-use sqlx::SqlitePool;
+use crate::config::AppState;
 
-pub fn api_routes() -> Router<SqlitePool> {
+pub fn api_routes() -> Router<AppState> {
     Router::new()
         .merge(companies::routes())
         .merge(fiscal_years::routes())
@@ -28,4 +29,5 @@ pub fn api_routes() -> Router<SqlitePool> {
         .merge(filing::routes())
         .merge(tax::routes())
         .merge(assets::routes())
+        .merge(admin::routes())
 }

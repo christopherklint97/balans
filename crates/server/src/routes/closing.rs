@@ -1,9 +1,11 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     routing::{get, post},
     Json, Router,
 };
-use sqlx::SqlitePool;
+use crate::access::verify_fiscal_year_access;
+use crate::auth::middleware::AuthUser;
+use crate::config::AppState;
 
 use crate::error::AppError;
 use crate::k2::{
@@ -11,7 +13,7 @@ use crate::k2::{
     validation::{validate_closing, ValidationResult},
 };
 
-pub fn routes() -> Router<SqlitePool> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
             "/fiscal-years/{fy_id}/closing/validate",
@@ -28,20 +30,26 @@ pub fn routes() -> Router<SqlitePool> {
 }
 
 async fn validate_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Json<ValidationResult>, AppError> {
-    let result = validate_closing(&pool, &fy_id).await?;
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
+    let result = validate_closing(&state.pool, &fy_id).await?;
     Ok(Json(result))
 }
 
 async fn execute_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
     Json(params): Json<ClosingParams>,
 ) -> Result<Json<ClosingResult>, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "member").await?;
+
     // Run validation first
-    let validation = validate_closing(&pool, &fy_id).await?;
+    let validation = validate_closing(&state.pool, &fy_id).await?;
     if !validation.passed {
         return Err(AppError::Validation(
             format!(
@@ -56,20 +64,23 @@ async fn execute_handler(
         ));
     }
 
-    let result = execute_closing(&pool, &fy_id, &params).await?;
+    let result = execute_closing(&state.pool, &fy_id, &params).await?;
     Ok(Json(result))
 }
 
 /// Get the closing status of a fiscal year.
 async fn status_handler(
-    State(pool): State<SqlitePool>,
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(fy_id): Path<String>,
 ) -> Result<Json<ClosingStatus>, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
     let fy = sqlx::query_as::<_, crate::models::fiscal_year::FiscalYear>(
         "SELECT * FROM fiscal_years WHERE id = ?",
     )
     .bind(&fy_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound(format!("Fiscal year {fy_id} not found")))?;
 
@@ -77,14 +88,14 @@ async fn status_handler(
         "SELECT COUNT(*) FROM vouchers WHERE fiscal_year_id = ? AND is_closing_entry = 1",
     )
     .bind(&fy_id)
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await?;
 
     let total_voucher_count = sqlx::query_scalar::<_, i32>(
         "SELECT COUNT(*) FROM vouchers WHERE fiscal_year_id = ?",
     )
     .bind(&fy_id)
-    .fetch_one(&pool)
+    .fetch_one(&state.pool)
     .await?;
 
     Ok(Json(ClosingStatus {
