@@ -77,4 +77,4 @@ frontend/               React SPA
 
 ## License
 
-Private
+[MIT](LICENSE)
