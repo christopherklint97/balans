@@ -39,6 +39,7 @@ fn default_fy_start() -> i32 {
 pub struct UpdateCompany {
     pub name: Option<String>,
     pub org_number: Option<String>,
+    pub company_form: Option<String>,
     pub address: Option<String>,
     pub postal_code: Option<String>,
     pub city: Option<String>,

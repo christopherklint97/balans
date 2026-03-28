@@ -156,15 +156,26 @@ async fn update_company(
     } else {
         existing.org_number
     };
+    let company_form = if let Some(ref form) = input.company_form {
+        if !["AB", "HB", "KB", "EF", "EK"].contains(&form.as_str()) {
+            return Err(AppError::Validation(
+                "company_form must be one of: AB, HB, KB, EF, EK".to_string(),
+            ));
+        }
+        form.clone()
+    } else {
+        existing.company_form
+    };
     let address = input.address.or(existing.address);
     let postal_code = input.postal_code.or(existing.postal_code);
     let city = input.city.or(existing.city);
 
     sqlx::query(
-        "UPDATE companies SET name = ?, org_number = ?, address = ?, postal_code = ?, city = ?, updated_at = ? WHERE id = ?"
+        "UPDATE companies SET name = ?, org_number = ?, company_form = ?, address = ?, postal_code = ?, city = ?, updated_at = ? WHERE id = ?"
     )
     .bind(&name)
     .bind(&org_number)
+    .bind(&company_form)
     .bind(&address)
     .bind(&postal_code)
     .bind(&city)

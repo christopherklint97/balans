@@ -71,11 +71,12 @@ function CompanyCard({ company }: { company: Company }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(company.name);
   const [editOrgNumber, setEditOrgNumber] = useState(company.org_number);
+  const [editCompanyForm, setEditCompanyForm] = useState(company.company_form);
   const [editError, setEditError] = useState('');
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      companiesApi.update(company.id, { name: editName, org_number: editOrgNumber }),
+      companiesApi.update(company.id, { name: editName, org_number: editOrgNumber, company_form: editCompanyForm }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       setEditing(false);
@@ -112,12 +113,27 @@ function CompanyCard({ company }: { company: Company }) {
                 onChange={(e) => setEditOrgNumber(e.target.value)}
               />
             </div>
+            <div className="space-y-1">
+              <Label htmlFor={`edit-form-${company.id}`}>Bolagsform</Label>
+              <select
+                id={`edit-form-${company.id}`}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={editCompanyForm}
+                onChange={(e) => setEditCompanyForm(e.target.value)}
+              >
+                <option value="AB">Aktiebolag (AB)</option>
+                <option value="EF">Enskild firma (EF)</option>
+                <option value="HB">Handelsbolag (HB)</option>
+                <option value="KB">Kommanditbolag (KB)</option>
+                <option value="EK">Ekonomisk förening (EK)</option>
+              </select>
+            </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}
             <div className="flex gap-2">
               <Button size="sm" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
                 {updateMutation.isPending ? 'Sparar...' : 'Spara'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setEditError(''); setEditName(company.name); setEditOrgNumber(company.org_number); }}>
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setEditError(''); setEditName(company.name); setEditOrgNumber(company.org_number); setEditCompanyForm(company.company_form); }}>
                 Avbryt
               </Button>
             </div>
