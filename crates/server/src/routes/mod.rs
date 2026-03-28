@@ -2,6 +2,7 @@ pub mod accounts;
 pub mod admin;
 pub mod annual_report;
 pub mod assets;
+pub mod attachments;
 pub mod closing;
 pub mod companies;
 pub mod compliance;
@@ -21,6 +22,7 @@ pub fn api_routes() -> Router<AppState> {
         .merge(fiscal_years::routes())
         .merge(accounts::routes())
         .merge(vouchers::routes())
+        .merge(attachments::routes())
         .merge(reports::routes())
         .merge(sie::routes())
         .merge(closing::routes())
