@@ -1,0 +1,16 @@
+services:
+  server:
+    build: .
+    container_name: balans
+    restart: unless-stopped
+    env_file: .env.docker
+    ports:
+      - "3100:3100"
+    volumes:
+      - balans_data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///app/data/balans.db
+      - PORT=3100
+
+volumes:
+  balans_data:
