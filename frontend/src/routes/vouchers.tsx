@@ -518,6 +518,7 @@ function VoucherForm({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                className="max-w-[180px]"
                 required
               />
             </div>
