@@ -2,9 +2,11 @@ import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tansta
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/auth/context';
+import { useTheme } from '@/hooks/use-theme';
 import { adminApi } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Sun, Moon, Monitor } from 'lucide-react';
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -12,6 +14,7 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   const { user, isLoading, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -65,6 +68,7 @@ function RootLayout() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle theme={theme} setTheme={setTheme} />
             <span className="text-xs text-muted-foreground">{user.name}</span>
             <Button
               variant="ghost"
@@ -109,7 +113,10 @@ function RootLayout() {
               </div>
             )}
             <div className="pt-2 border-t border-border flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{user.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{user.name}</span>
+                <ThemeToggle theme={theme} setTheme={setTheme} />
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
@@ -174,5 +181,22 @@ function MobileNavLink({ to, children }: { to: string; children: React.ReactNode
     >
       {children}
     </Link>
+  );
+}
+
+function ThemeToggle({ theme, setTheme }: { theme: string; setTheme: (t: 'light' | 'dark' | 'system') => void }) {
+  const next = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
+  const icon = theme === 'light' ? <Sun className="h-4 w-4" /> : theme === 'dark' ? <Moon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />;
+  const label = theme === 'light' ? 'Ljust läge' : theme === 'dark' ? 'Mörkt läge' : 'Systemläge';
+
+  return (
+    <button
+      onClick={() => setTheme(next)}
+      className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+      title={label}
+      aria-label={label}
+    >
+      {icon}
+    </button>
   );
 }
