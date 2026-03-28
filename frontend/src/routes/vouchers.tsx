@@ -353,25 +353,24 @@ function UnderlagUpload({
   return (
     <div className="space-y-2">
       <Label>Underlag</Label>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex gap-3 overflow-x-auto pb-2">
         {files.map((f, i) => (
-          <div key={i} className="relative group">
-            <div className="w-20 h-20 rounded-md border border-border overflow-hidden bg-muted flex items-center justify-center">
+          <div key={i} className="relative group shrink-0">
+            <div className="w-36 h-48 rounded-md border border-border overflow-hidden bg-muted flex items-center justify-center">
               {f.preview && f.file.type.startsWith('image/') ? (
                 <img src={f.preview} alt={f.file.name} className="w-full h-full object-cover" />
               ) : f.preview && f.file.type === 'application/pdf' ? (
-                <div className="text-center p-1">
-                  <svg className="w-6 h-6 mx-auto text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  <span className="text-[10px] text-muted-foreground">PDF</span>
-                </div>
+                <iframe
+                  src={`${f.preview}#toolbar=0&navpanes=0`}
+                  title={f.file.name}
+                  className="w-full h-full border-0"
+                />
               ) : (
-                <div className="text-center p-1">
-                  <svg className="w-6 h-6 mx-auto text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-center p-2">
+                  <svg className="w-8 h-8 mx-auto text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
-                  <span className="text-[10px] text-muted-foreground truncate block">{f.file.name.split('.').pop()?.toUpperCase()}</span>
+                  <span className="text-xs text-muted-foreground mt-1 block">{f.file.name.split('.').pop()?.toUpperCase()}</span>
                 </div>
               )}
             </div>
@@ -382,18 +381,18 @@ function UnderlagUpload({
             >
               x
             </button>
-            <p className="text-[10px] text-muted-foreground truncate w-20 mt-0.5">{f.file.name}</p>
+            <p className="text-[10px] text-muted-foreground truncate w-36 mt-0.5">{f.file.name}</p>
           </div>
         ))}
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="w-20 h-20 rounded-md border-2 border-dashed border-border hover:border-ring flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          className="w-36 h-48 shrink-0 rounded-md border-2 border-dashed border-border hover:border-ring flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
           </svg>
-          <span className="text-[10px]">Lägg till</span>
+          <span className="text-xs mt-1">Lägg till</span>
         </button>
       </div>
       <input
@@ -510,7 +509,7 @@ function VoucherForm({
             mutation.mutate();
           }}
         >
-          <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+          <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
             <div className="space-y-2">
               <Label htmlFor="date">Datum</Label>
               <Input
@@ -518,7 +517,7 @@ function VoucherForm({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="max-w-[180px]"
+                className="max-w-[150px]"
                 required
               />
             </div>
