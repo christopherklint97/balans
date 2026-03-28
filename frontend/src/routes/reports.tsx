@@ -48,9 +48,9 @@ function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Rapporter</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant={tab === 'income' ? 'default' : 'outline'}
             size="sm"
@@ -96,8 +96,8 @@ function IncomeStatementView({ fyId }: { fyId: string }) {
       <CardHeader>
         <CardTitle className="text-base">Resultaträkning (K2)</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="font-mono text-sm space-y-0.5">
+      <CardContent className="overflow-x-auto">
+        <div className="font-mono text-sm space-y-0.5 min-w-[320px]">
           <ISHeader current={data.current.fiscal_year} previous={data.previous?.fiscal_year} />
           <Separator className="my-2" />
           <ISRow label="Nettoomsättning" c={data.current.net_revenue} p={data.previous?.net_revenue} />
@@ -143,8 +143,8 @@ function BalanceSheetView({ fyId }: { fyId: string }) {
       <CardHeader>
         <CardTitle className="text-base">Balansräkning (K2)</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="font-mono text-sm space-y-0.5">
+      <CardContent className="overflow-x-auto">
+        <div className="font-mono text-sm space-y-0.5 min-w-[320px]">
           <ISHeader current={c.fiscal_year} previous={p?.fiscal_year} />
           <Separator className="my-2" />
 

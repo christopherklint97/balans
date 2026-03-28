@@ -146,14 +146,25 @@ async fn update_company(
 
     let now = Utc::now().to_rfc3339();
     let name = input.name.unwrap_or(existing.name);
+    let org_number = if let Some(ref org) = input.org_number {
+        if !validate_organisationsnummer(org) {
+            return Err(AppError::Validation(
+                "Invalid organisationsnummer".to_string(),
+            ));
+        }
+        org.replace('-', "")
+    } else {
+        existing.org_number
+    };
     let address = input.address.or(existing.address);
     let postal_code = input.postal_code.or(existing.postal_code);
     let city = input.city.or(existing.city);
 
     sqlx::query(
-        "UPDATE companies SET name = ?, address = ?, postal_code = ?, city = ?, updated_at = ? WHERE id = ?"
+        "UPDATE companies SET name = ?, org_number = ?, address = ?, postal_code = ?, city = ?, updated_at = ? WHERE id = ?"
     )
     .bind(&name)
+    .bind(&org_number)
     .bind(&address)
     .bind(&postal_code)
     .bind(&city)

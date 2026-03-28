@@ -57,9 +57,9 @@ function VouchersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Verifikationer</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant={view === 'list' ? 'default' : 'outline'}
             size="sm"
@@ -239,7 +239,8 @@ function VoucherForm({
           <Separator />
 
           <div className="space-y-2">
-            <div className="grid grid-cols-[1fr_2fr_100px_100px_40px] gap-2 text-sm font-medium text-muted-foreground">
+            {/* Desktop header */}
+            <div className="hidden sm:grid grid-cols-[1fr_2fr_100px_100px_40px] gap-2 text-sm font-medium text-muted-foreground">
               <span>Konto</span>
               <span>Kontonamn</span>
               <span>Debet</span>
@@ -252,50 +253,112 @@ function VoucherForm({
                 (a) => a.number === parseInt(line.account_number, 10),
               );
               return (
-                <div key={i} className="grid grid-cols-[1fr_2fr_100px_100px_40px] gap-2">
-                  <Input
-                    value={line.account_number}
-                    onChange={(e) => updateLine(i, 'account_number', e.target.value)}
-                    placeholder="1910"
-                    className="font-mono"
-                  />
-                  <span className="flex items-center text-sm text-muted-foreground truncate">
-                    {matchedAccount?.name || ''}
-                  </span>
-                  <Input
-                    value={line.debit}
-                    onChange={(e) => {
-                      updateLine(i, 'debit', e.target.value);
-                      if (e.target.value) updateLine(i, 'credit', '');
-                    }}
-                    placeholder="0.00"
-                    className="font-mono text-right"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                  />
-                  <Input
-                    value={line.credit}
-                    onChange={(e) => {
-                      updateLine(i, 'credit', e.target.value);
-                      if (e.target.value) updateLine(i, 'debit', '');
-                    }}
-                    placeholder="0.00"
-                    className="font-mono text-right"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeLine(i)}
-                    disabled={lines.length <= 2}
-                    className="text-muted-foreground"
-                  >
-                    x
-                  </Button>
+                <div key={i}>
+                  {/* Desktop row */}
+                  <div className="hidden sm:grid grid-cols-[1fr_2fr_100px_100px_40px] gap-2">
+                    <Input
+                      value={line.account_number}
+                      onChange={(e) => updateLine(i, 'account_number', e.target.value)}
+                      placeholder="1910"
+                      className="font-mono"
+                    />
+                    <span className="flex items-center text-sm text-muted-foreground truncate">
+                      {matchedAccount?.name || ''}
+                    </span>
+                    <Input
+                      value={line.debit}
+                      onChange={(e) => {
+                        updateLine(i, 'debit', e.target.value);
+                        if (e.target.value) updateLine(i, 'credit', '');
+                      }}
+                      placeholder="0.00"
+                      className="font-mono text-right"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                    />
+                    <Input
+                      value={line.credit}
+                      onChange={(e) => {
+                        updateLine(i, 'credit', e.target.value);
+                        if (e.target.value) updateLine(i, 'debit', '');
+                      }}
+                      placeholder="0.00"
+                      className="font-mono text-right"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeLine(i)}
+                      disabled={lines.length <= 2}
+                      className="text-muted-foreground"
+                    >
+                      x
+                    </Button>
+                  </div>
+
+                  {/* Mobile card */}
+                  <div className="sm:hidden rounded-md border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Input
+                          value={line.account_number}
+                          onChange={(e) => updateLine(i, 'account_number', e.target.value)}
+                          placeholder="Konto"
+                          className="font-mono w-20"
+                        />
+                        <span className="text-sm text-muted-foreground truncate">
+                          {matchedAccount?.name || ''}
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeLine(i)}
+                        disabled={lines.length <= 2}
+                        className="text-muted-foreground shrink-0"
+                      >
+                        x
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Debet</span>
+                        <Input
+                          value={line.debit}
+                          onChange={(e) => {
+                            updateLine(i, 'debit', e.target.value);
+                            if (e.target.value) updateLine(i, 'credit', '');
+                          }}
+                          placeholder="0.00"
+                          className="font-mono text-right"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Kredit</span>
+                        <Input
+                          value={line.credit}
+                          onChange={(e) => {
+                            updateLine(i, 'credit', e.target.value);
+                            if (e.target.value) updateLine(i, 'debit', '');
+                          }}
+                          placeholder="0.00"
+                          className="font-mono text-right"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -307,8 +370,8 @@ function VoucherForm({
 
           <Separator />
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm space-x-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
               <span>
                 Debet: <span className="font-mono font-medium">{totalDebit.toFixed(2)}</span>
               </span>
@@ -319,7 +382,7 @@ function VoucherForm({
                 Diff: {(totalDebit - totalCredit).toFixed(2)}
               </span>
             </div>
-            <Button type="submit" disabled={!isBalanced || mutation.isPending || !description}>
+            <Button type="submit" disabled={!isBalanced || mutation.isPending || !description} className="w-full sm:w-auto">
               {mutation.isPending ? 'Sparar...' : 'Bokför'}
             </Button>
           </div>

@@ -66,6 +66,24 @@ function Dashboard() {
 }
 
 function CompanyCard({ company }: { company: Company }) {
+  const queryClient = useQueryClient();
+  const [showFyForm, setShowFyForm] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(company.name);
+  const [editOrgNumber, setEditOrgNumber] = useState(company.org_number);
+  const [editError, setEditError] = useState('');
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      companiesApi.update(company.id, { name: editName, org_number: editOrgNumber }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      setEditing(false);
+      setEditError('');
+    },
+    onError: (err: Error) => setEditError(err.message),
+  });
+
   const { data: fiscalYears } = useQuery({
     queryKey: ['fiscal-years', company.id],
     queryFn: () => fiscalYearsApi.list(company.id),
@@ -76,11 +94,48 @@ function CompanyCard({ company }: { company: Company }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">{company.name}</CardTitle>
-          <Badge variant="secondary">{company.company_form}</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">{company.org_number}</p>
+        {editing ? (
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <Label htmlFor={`edit-name-${company.id}`}>Företagsnamn</Label>
+              <Input
+                id={`edit-name-${company.id}`}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`edit-org-${company.id}`}>Organisationsnummer</Label>
+              <Input
+                id={`edit-org-${company.id}`}
+                value={editOrgNumber}
+                onChange={(e) => setEditOrgNumber(e.target.value)}
+              />
+            </div>
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? 'Sparar...' : 'Spara'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setEditError(''); setEditName(company.name); setEditOrgNumber(company.org_number); }}>
+                Avbryt
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">{company.name}</CardTitle>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{company.company_form}</Badge>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditing(true)}>
+                  Redigera
+                </Button>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{company.org_number}</p>
+          </>
+        )}
       </CardHeader>
       <CardContent className="space-y-2">
         {activeFy ? (
@@ -89,9 +144,28 @@ function CompanyCard({ company }: { company: Company }) {
             {activeFy.start_date} — {activeFy.end_date}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Inget räkenskapsår skapat</p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Inget räkenskapsår skapat</p>
+            {!showFyForm && (
+              <Button variant="outline" size="sm" onClick={() => setShowFyForm(true)}>
+                Skapa räkenskapsår
+              </Button>
+            )}
+          </div>
         )}
-        <div className="flex gap-2 pt-2">
+
+        {showFyForm && !activeFy && (
+          <CreateFiscalYearForm
+            companyId={company.id}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['fiscal-years', company.id] });
+              setShowFyForm(false);
+            }}
+            onCancel={() => setShowFyForm(false)}
+          />
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-2">
           <Link to="/accounts" search={{ companyId: company.id }}>
             <Button variant="outline" size="sm">Kontoplan</Button>
           </Link>
@@ -103,6 +177,65 @@ function CompanyCard({ company }: { company: Company }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function CreateFiscalYearForm({
+  companyId,
+  onSuccess,
+  onCancel,
+}: {
+  companyId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const year = new Date().getFullYear();
+  const [startDate, setStartDate] = useState(`${year}-01-01`);
+  const [endDate, setEndDate] = useState(`${year}-12-31`);
+  const [error, setError] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      fiscalYearsApi.create(companyId, { start_date: startDate, end_date: endDate }),
+    onSuccess,
+    onError: (err: Error) => setError(err.message),
+  });
+
+  return (
+    <div className="space-y-3 rounded-md border border-border p-3">
+      <p className="text-sm font-medium">Nytt räkenskapsår</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label htmlFor="fy-start">Startdatum</Label>
+          <Input
+            id="fy-start"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="fy-end">Slutdatum</Label>
+          <Input
+            id="fy-end"
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            required
+          />
+        </div>
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex gap-2">
+        <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+          {mutation.isPending ? 'Skapar...' : 'Skapa'}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>
+          Avbryt
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -173,7 +306,7 @@ function CreateCompanyForm({ onSuccess }: { onSuccess: () => void }) {
               id="form"
               value={companyForm}
               onChange={(e) => setCompanyForm(e.target.value)}
-              className="flex h-9 w-full max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+              className="flex h-9 w-full sm:max-w-[200px] rounded-md border border-input bg-transparent px-3 py-1 text-sm"
             >
               <option value="AB">Aktiebolag (AB)</option>
               <option value="EF">Enskild firma (EF)</option>

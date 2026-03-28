@@ -18,6 +18,16 @@ pnpm build                   # production build
 pnpm lint                    # eslint
 ```
 
+## Deploy
+
+```sh
+docker compose up --build -d   # build & deploy container (port 3100)
+docker compose logs -f         # tail logs
+docker compose down            # stop
+```
+
+Environment is configured in `.env.docker`. Data persists in the `balans_data` Docker volume.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |

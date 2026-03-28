@@ -143,7 +143,7 @@ function ClosingWizard({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold">Årsbokslut</h1>
         <span className="text-sm text-muted-foreground">
           {startDate} — {endDate}
@@ -151,7 +151,7 @@ function ClosingWizard({
       </div>
 
       {/* Step indicators */}
-      <div className="flex gap-2 text-sm">
+      <div className="flex flex-wrap gap-2 text-sm">
         <Badge variant={step === 'validate' ? 'default' : 'secondary'}>1. Validera</Badge>
         <Badge variant={step === 'review' ? 'default' : 'secondary'}>2. Granska</Badge>
         <Badge variant={step === 'done' ? 'default' : 'secondary'}>3. Klart</Badge>
