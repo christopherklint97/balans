@@ -20,8 +20,8 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('balans_token'));
+  const [isLoading, setIsLoading] = useState(() => !!localStorage.getItem('balans_token'));
 
   const login = useCallback((newToken: string, newUser: UserInfo) => {
     localStorage.setItem('balans_token', newToken);
@@ -36,9 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('balans_token');
-    if (savedToken) {
-      setToken(savedToken);
+    if (token) {
       authApi
         .me()
         .then((u) => setUser(u))
@@ -47,10 +45,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(null);
         })
         .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
     }
-  }, []);
+  }, [token]);
 
   return (
     <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>

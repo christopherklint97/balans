@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { vouchersApi, accountsApi, companiesApi, fiscalYearsApi, reportsApi } from '@/api/queries';
-import type { Account, CreateVoucherLine } from '@/api/types';
+import { vouchersApi, accountsApi, companiesApi, fiscalYearsApi, reportsApi, attachmentsApi } from '@/api/queries';
+import type { Account, AttachmentMeta, CreateVoucherLine, VoucherWithLines } from '@/api/types';
 import {
   Table,
   TableBody,
@@ -21,7 +21,8 @@ import { formatSEK, parseSEK, normalizeAmountInput } from '@/lib/format';
 interface VouchersSearch {
   companyId?: string;
   fyId?: string;
-  view?: 'list' | 'new' | 'balance';
+  view?: 'list' | 'new' | 'balance' | 'detail';
+  voucherId?: string;
 }
 
 export const Route = createFileRoute('/vouchers')({
@@ -30,11 +31,12 @@ export const Route = createFileRoute('/vouchers')({
     companyId: search.companyId as string | undefined,
     fyId: search.fyId as string | undefined,
     view: (search.view as VouchersSearch['view']) || 'list',
+    voucherId: search.voucherId as string | undefined,
   }),
 });
 
 function VouchersPage() {
-  const { companyId, fyId, view } = Route.useSearch();
+  const { companyId, fyId, view, voucherId } = Route.useSearch();
   const navigate = Route.useNavigate();
 
   const { data: companies } = useQuery({
@@ -51,6 +53,7 @@ function VouchersPage() {
   });
 
   const activeFyId = fyId || fiscalYears?.find((fy) => !fy.is_closed)?.id;
+  const activeFy = fiscalYears?.find((fy) => fy.id === activeFyId);
 
   if (!activeCompanyId || !activeFyId) {
     return <p className="text-muted-foreground">Skapa ett företag och räkenskapsår först.</p>;
@@ -62,7 +65,7 @@ function VouchersPage() {
         <h1 className="text-2xl font-semibold">Verifikationer</h1>
         <div className="flex flex-wrap gap-2">
           <Button
-            variant={view === 'list' ? 'default' : 'outline'}
+            variant={view === 'list' || view === 'detail' ? 'default' : 'outline'}
             size="sm"
             onClick={() => navigate({ search: { companyId, fyId, view: 'list' } })}
           >
@@ -93,14 +96,25 @@ function VouchersPage() {
         />
       ) : view === 'balance' ? (
         <TrialBalance fyId={activeFyId} />
+      ) : view === 'detail' && voucherId ? (
+        <VoucherDetail
+          voucherId={voucherId}
+          companyId={activeCompanyId}
+          fyId={activeFyId}
+          isFyClosed={activeFy?.is_closed ?? false}
+          onBack={() => navigate({ search: { companyId, fyId, view: 'list' } })}
+        />
       ) : (
-        <VoucherList fyId={activeFyId} />
+        <VoucherList
+          fyId={activeFyId}
+          onSelect={(id) => navigate({ search: { companyId, fyId, view: 'detail', voucherId: id } })}
+        />
       )}
     </div>
   );
 }
 
-function VoucherList({ fyId }: { fyId: string }) {
+function VoucherList({ fyId, onSelect }: { fyId: string; onSelect: (id: string) => void }) {
   const { data: vouchers, isLoading } = useQuery({
     queryKey: ['vouchers', fyId],
     queryFn: () => vouchersApi.list(fyId),
@@ -122,7 +136,11 @@ function VoucherList({ fyId }: { fyId: string }) {
           </TableHeader>
           <TableBody>
             {vouchers.map((v) => (
-              <TableRow key={v.id}>
+              <TableRow
+                key={v.id}
+                className="cursor-pointer"
+                onClick={() => onSelect(v.id)}
+              >
                 <TableCell className="font-mono">{v.voucher_number}</TableCell>
                 <TableCell>{v.date}</TableCell>
                 <TableCell>{v.description}</TableCell>
@@ -132,6 +150,252 @@ function VoucherList({ fyId }: { fyId: string }) {
         </Table>
       </CardContent>
     </Card>
+  );
+}
+
+// --- Attachment Preview (fetches via Bearer auth) ---
+
+function AttachmentPreview({ voucherId, attachment }: { voucherId: string; attachment: AttachmentMeta }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const url = attachmentsApi.downloadUrl(voucherId, attachment.id);
+    const token = localStorage.getItem('balans_token');
+    fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('Failed'))))
+      .then((blob) => {
+        if (!cancelled) {
+          const objectUrl = URL.createObjectURL(blob);
+          blobUrlRef.current = objectUrl;
+          setBlobUrl(objectUrl);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+    };
+  }, [voucherId, attachment.id]);
+
+  return (
+    <div className="rounded-md border border-border overflow-hidden">
+      {blobUrl && attachment.content_type.startsWith('image/') ? (
+        <img src={blobUrl} alt={attachment.filename} className="w-full object-contain max-h-[500px]" />
+      ) : blobUrl && attachment.content_type === 'application/pdf' ? (
+        <iframe src={blobUrl} title={attachment.filename} className="w-full h-[500px] border-0" />
+      ) : (
+        <div className="text-center p-6">
+          <p className="text-sm text-muted-foreground">{attachment.filename}</p>
+        </div>
+      )}
+      <div className="px-3 py-1.5 bg-muted/50">
+        <p className="text-xs text-muted-foreground">{attachment.filename}</p>
+      </div>
+    </div>
+  );
+}
+
+// --- Voucher Detail (read-only) ---
+
+function VoucherDetail({
+  voucherId,
+  companyId,
+  fyId,
+  isFyClosed,
+  onBack,
+}: {
+  voucherId: string;
+  companyId: string;
+  fyId: string;
+  isFyClosed: boolean;
+  onBack: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const navigate = Route.useNavigate();
+  const { companyId: searchCompanyId, fyId: searchFyId } = Route.useSearch();
+
+  const { data: voucher, isLoading } = useQuery({
+    queryKey: ['voucher', voucherId],
+    queryFn: () => vouchersApi.get(voucherId),
+  });
+
+  const { data: attachments } = useQuery({
+    queryKey: ['attachments', voucherId],
+    queryFn: () => attachmentsApi.list(voucherId),
+  });
+
+  const { data: accounts } = useQuery({
+    queryKey: ['accounts', companyId],
+    queryFn: () => accountsApi.list(companyId),
+  });
+
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [error, setError] = useState('');
+
+  const strykaMutation = useMutation({
+    mutationFn: (original: VoucherWithLines) => {
+      const today = new Date().toISOString().slice(0, 10);
+      const lines: CreateVoucherLine[] = original.lines.map((l) => ({
+        account_number: l.account_number,
+        debit: l.credit,
+        credit: l.debit,
+      }));
+      return vouchersApi.create(fyId, {
+        date: today,
+        description: `Strykning av verifikation ${original.voucher_number}`,
+        lines,
+      });
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['vouchers', fyId] });
+      queryClient.invalidateQueries({ queryKey: ['trial-balance', fyId] });
+      navigate({
+        search: {
+          companyId: searchCompanyId,
+          fyId: searchFyId,
+          view: 'detail' as const,
+          voucherId: result.id,
+        },
+      });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  if (isLoading) return <p className="text-muted-foreground">Laddar...</p>;
+  if (!voucher) return <p className="text-muted-foreground">Verifikationen hittades inte.</p>;
+
+  const accountName = (num: number) => accounts?.find((a) => a.number === num)?.name ?? '';
+
+  const totalDebit = voucher.lines.reduce((s, l) => s + parseFloat(l.debit), 0);
+  const totalCredit = voucher.lines.reduce((s, l) => s + parseFloat(l.credit), 0);
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-10rem)]">
+      {/* Left: Voucher details */}
+      <Card className="flex-1 min-w-0 lg:w-1/2 lg:flex lg:flex-col lg:overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              &larr; Tillbaka
+            </Button>
+            <CardTitle className="text-base">
+              Verifikation #{voucher.voucher_number}
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 lg:overflow-y-auto lg:flex-1">
+          <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs">Datum</Label>
+              <p className="text-sm">{voucher.date}</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs">Beskrivning</Label>
+              <p className="text-sm">{voucher.description}</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Voucher lines table */}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-20">Konto</TableHead>
+                <TableHead>Kontonamn</TableHead>
+                <TableHead className="text-right w-28">Debet</TableHead>
+                <TableHead className="text-right w-28">Kredit</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {voucher.lines.map((line) => (
+                <TableRow key={line.id}>
+                  <TableCell className="font-mono">{line.account_number}</TableCell>
+                  <TableCell className="text-muted-foreground">{accountName(line.account_number)}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {parseFloat(line.debit) > 0 ? formatSEK(line.debit) : ''}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {parseFloat(line.credit) > 0 ? formatSEK(line.credit) : ''}
+                  </TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="font-semibold">
+                <TableCell />
+                <TableCell>Summa</TableCell>
+                <TableCell className="text-right font-mono">{formatSEK(totalDebit)}</TableCell>
+                <TableCell className="text-right font-mono">{formatSEK(totalCredit)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+
+          <Separator />
+
+          {/* Stryka section */}
+          {!isFyClosed && (
+            <div className="space-y-2">
+              {!showConfirm ? (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowConfirm(true)}
+                >
+                  Stryka verifikation
+                </Button>
+              ) : (
+                <div className="flex flex-col gap-2 rounded-md border border-destructive/50 p-3">
+                  <p className="text-sm">
+                    Detta skapar en ny verifikation som nollställer alla belopp i denna verifikation. Vill du fortsätta?
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={strykaMutation.isPending}
+                      onClick={() => strykaMutation.mutate(voucher)}
+                    >
+                      {strykaMutation.isPending ? 'Skapar...' : 'Ja, stryka'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowConfirm(false)}
+                    >
+                      Avbryt
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Skapad: {voucher.created_at}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Right: Attachments panel (desktop) */}
+      {attachments && attachments.length > 0 && (
+        <div className="lg:w-1/2 lg:min-w-0">
+          <Card className="flex flex-col w-full overflow-hidden lg:h-full">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Underlag</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto space-y-3">
+              {attachments.map((att) => (
+                <AttachmentPreview key={att.id} voucherId={voucherId} attachment={att} />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -160,10 +424,6 @@ function AccountAutocomplete({
     const q = value.toLowerCase();
     return a.number.toString().startsWith(q) || a.name.toLowerCase().includes(q);
   }).slice(0, 10) ?? [];
-
-  useEffect(() => {
-    setHighlightIndex(0);
-  }, [value]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -207,6 +467,7 @@ function AccountAutocomplete({
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);
+          setHighlightIndex(0);
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
@@ -253,53 +514,42 @@ function AmountInput({
   placeholder?: string;
   className?: string;
 }) {
-  const [displayValue, setDisplayValue] = useState(() =>
-    value ? value.replace('.', ',') : '',
-  );
-  const prevValueRef = useRef(value);
-  const isFocusedRef = useRef(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [localDisplay, setLocalDisplay] = useState('');
 
-  // Sync display when value changes externally (e.g. cleared by debit/credit toggle)
-  if (prevValueRef.current !== value) {
-    prevValueRef.current = value;
-    if (!isFocusedRef.current) {
-      const expected = value ? value.replace('.', ',') : '';
-      if (displayValue !== expected) {
-        setDisplayValue(expected);
-      }
-    }
-  }
+  // When not focused, derive display from value prop directly
+  const displayValue = isFocused
+    ? localDisplay
+    : value ? value.replace('.', ',') : '';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
     const normalized = normalizeAmountInput(raw);
-    setDisplayValue(raw.replace('.', ',').replace(/[^\d,]/g, ''));
+    setLocalDisplay(raw.replace('.', ',').replace(/[^\d,]/g, ''));
     onChange(normalized);
   };
 
   const handleBlur = () => {
-    isFocusedRef.current = false;
-    if (!value) {
-      setDisplayValue('');
-      return;
-    }
+    setIsFocused(false);
+    if (!value) return;
     const num = parseSEK(value);
-    if (num > 0) {
-      setDisplayValue(formatSEK(num));
-    } else {
-      setDisplayValue('');
+    if (num <= 0) {
       onChange('');
     }
   };
 
   const handleFocus = () => {
-    isFocusedRef.current = true;
     if (value) {
       const num = parseSEK(value);
       if (num > 0) {
-        setDisplayValue(num.toString().replace('.', ','));
+        setLocalDisplay(num.toString().replace('.', ','));
+      } else {
+        setLocalDisplay('');
       }
+    } else {
+      setLocalDisplay('');
     }
+    setIsFocused(true);
   };
 
   return (

@@ -9,6 +9,7 @@ import type {
   Voucher,
   VoucherWithLines,
   CreateVoucher,
+  AttachmentMeta,
   TrialBalanceRow,
   SieImportPreview,
   SieImportResult,
@@ -67,6 +68,13 @@ export const vouchersApi = {
   create: (fyId: string, data: CreateVoucher) =>
     post<VoucherWithLines>(`/fiscal-years/${fyId}/vouchers`, data),
   delete: (id: string) => del<{ deleted: boolean }>(`/vouchers/${id}`),
+};
+
+// Attachments
+export const attachmentsApi = {
+  list: (voucherId: string) => get<AttachmentMeta[]>(`/vouchers/${voucherId}/attachments`),
+  downloadUrl: (voucherId: string, attachmentId: string) =>
+    `/api/vouchers/${voucherId}/attachments/${attachmentId}`,
 };
 
 // Reports

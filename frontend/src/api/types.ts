@@ -123,6 +123,15 @@ export interface CreateVoucherLine {
   description?: string;
 }
 
+export interface AttachmentMeta {
+  id: string;
+  voucher_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
 export interface TrialBalanceRow {
   account_number: number;
   account_name: string;

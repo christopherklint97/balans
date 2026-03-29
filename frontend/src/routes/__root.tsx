@@ -1,6 +1,6 @@
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/auth/context';
 import { useTheme } from '@/hooks/use-theme';
 import { adminApi } from '@/api/queries';
@@ -18,11 +18,6 @@ function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location.pathname]);
 
   // Show nothing while checking auth
   if (isLoading) {
@@ -108,16 +103,16 @@ function RootLayout() {
 
           {menuOpen && (
             <div className="border-t border-border bg-background px-4 py-3 space-y-1">
-              <MobileNavLink to="/">Kontrollpanel</MobileNavLink>
-              <MobileNavLink to="/accounts">Kontoplan</MobileNavLink>
-              <MobileNavLink to="/assets">Tillgångar</MobileNavLink>
-              <MobileNavLink to="/vouchers">Verifikationer</MobileNavLink>
-              <MobileNavLink to="/reports">Rapporter</MobileNavLink>
-              <MobileNavLink to="/closing">Bokslut</MobileNavLink>
-              <MobileNavLink to="/sie">SIE</MobileNavLink>
-              <MobileNavLink to="/tax">INK2</MobileNavLink>
-              <MobileNavLink to="/filing">Inlämning</MobileNavLink>
-              <MobileNavLink to="/compliance">Compliance</MobileNavLink>
+              <MobileNavLink to="/" onClick={() => setMenuOpen(false)}>Kontrollpanel</MobileNavLink>
+              <MobileNavLink to="/accounts" onClick={() => setMenuOpen(false)}>Kontoplan</MobileNavLink>
+              <MobileNavLink to="/assets" onClick={() => setMenuOpen(false)}>Tillgångar</MobileNavLink>
+              <MobileNavLink to="/vouchers" onClick={() => setMenuOpen(false)}>Verifikationer</MobileNavLink>
+              <MobileNavLink to="/reports" onClick={() => setMenuOpen(false)}>Rapporter</MobileNavLink>
+              <MobileNavLink to="/closing" onClick={() => setMenuOpen(false)}>Bokslut</MobileNavLink>
+              <MobileNavLink to="/sie" onClick={() => setMenuOpen(false)}>SIE</MobileNavLink>
+              <MobileNavLink to="/tax" onClick={() => setMenuOpen(false)}>INK2</MobileNavLink>
+              <MobileNavLink to="/filing" onClick={() => setMenuOpen(false)}>Inlämning</MobileNavLink>
+              <MobileNavLink to="/compliance" onClick={() => setMenuOpen(false)}>Compliance</MobileNavLink>
               {user.role === 'admin' && (
                 <div className="py-2">
                   <AdminNavLink />
@@ -212,10 +207,11 @@ function AdminNavLink() {
   );
 }
 
-function MobileNavLink({ to, children }: { to: string; children: React.ReactNode }) {
+function MobileNavLink({ to, onClick, children }: { to: string; onClick?: () => void; children: React.ReactNode }) {
   return (
     <Link
       to={to}
+      onClick={onClick}
       className="block py-2 text-sm text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground [&.active]:font-medium"
     >
       {children}

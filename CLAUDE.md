@@ -52,6 +52,10 @@ Environment is configured in `.env.docker`. Data persists in the `balans_data` D
 - **Frontend routing:** TanStack Router with file-based route generation (`routeTree.gen.ts` is auto-generated, do not edit manually).
 - **API client:** `frontend/src/api/client.ts` handles auth headers and base URL. Queries/mutations in `queries.ts`.
 
+## Code Quality
+
+- **Never add `eslint-disable` comments.** Fix the underlying issue instead.
+
 ## Conventions
 
 - All monetary amounts are in Swedish kronor (SEK), stored as cents (ören).
