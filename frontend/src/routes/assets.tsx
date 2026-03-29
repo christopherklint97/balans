@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { companiesApi, fiscalYearsApi, assetsApi } from '@/api/queries';
+import { assetsApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,16 +18,12 @@ import {
 } from '@/components/ui/table';
 
 interface AssetsSearch {
-  companyId?: string;
-  fyId?: string;
   view?: 'register' | 'depreciation' | 'new';
 }
 
 export const Route = createFileRoute('/assets')({
   component: AssetsPage,
   validateSearch: (search: Record<string, unknown>): AssetsSearch => ({
-    companyId: search.companyId as string | undefined,
-    fyId: search.fyId as string | undefined,
     view: (search.view as AssetsSearch['view']) || 'register',
   }),
 });
@@ -45,23 +42,9 @@ const TYPE_LABELS: Record<string, string> = Object.fromEntries(
 );
 
 function AssetsPage() {
-  const { companyId, fyId, view } = Route.useSearch();
+  const { view } = Route.useSearch();
   const navigate = Route.useNavigate();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
-
-  const { data: fiscalYears } = useQuery({
-    queryKey: ['fiscal-years', activeCompanyId],
-    queryFn: () => fiscalYearsApi.list(activeCompanyId!),
-    enabled: !!activeCompanyId,
-  });
-
-  const activeFyId = fyId || fiscalYears?.find((fy) => !fy.is_closed)?.id;
+  const { activeCompanyId, activeFyId } = useFiscalYear();
 
   if (!activeCompanyId) {
     return <p className="text-muted-foreground">Skapa ett företag först.</p>;
@@ -75,21 +58,21 @@ function AssetsPage() {
           <Button
             variant={view === 'register' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, view: 'register' } })}
+            onClick={() => navigate({ search: { view: 'register' } })}
           >
             Register
           </Button>
           <Button
             variant={view === 'depreciation' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, view: 'depreciation' } })}
+            onClick={() => navigate({ search: { view: 'depreciation' } })}
           >
             Avskrivningar
           </Button>
           <Button
             variant={view === 'new' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, view: 'new' } })}
+            onClick={() => navigate({ search: { view: 'new' } })}
           >
             Ny tillgång
           </Button>
@@ -103,7 +86,7 @@ function AssetsPage() {
       {view === 'new' && (
         <CreateAssetForm
           companyId={activeCompanyId}
-          onSuccess={() => navigate({ search: { companyId, fyId, view: 'register' } })}
+          onSuccess={() => navigate({ search: { view: 'register' } })}
         />
       )}
     </div>

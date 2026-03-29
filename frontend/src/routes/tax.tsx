@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { companiesApi, fiscalYearsApi, taxApi } from '@/api/queries';
+import { taxApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,36 +14,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-interface TaxSearch {
-  companyId?: string;
-  fyId?: string;
-}
-
 export const Route = createFileRoute('/tax')({
   component: TaxPage,
-  validateSearch: (search: Record<string, unknown>): TaxSearch => ({
-    companyId: search.companyId as string | undefined,
-    fyId: search.fyId as string | undefined,
-  }),
 });
 
 function TaxPage() {
-  const { companyId, fyId } = Route.useSearch();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
-
-  const { data: fiscalYears } = useQuery({
-    queryKey: ['fiscal-years', activeCompanyId],
-    queryFn: () => fiscalYearsApi.list(activeCompanyId!),
-    enabled: !!activeCompanyId,
-  });
-
-  const activeFyId = fyId || fiscalYears?.find((fy) => fy.is_closed)?.id || fiscalYears?.[0]?.id;
+  const { activeCompanyId, activeFyId } = useFiscalYear();
 
   if (!activeCompanyId || !activeFyId) {
     return <p className="text-muted-foreground">Skapa ett företag och räkenskapsår först.</p>;

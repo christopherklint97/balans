@@ -1,43 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { companiesApi, fiscalYearsApi, filingApi } from '@/api/queries';
+import { filingApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import type { FilingResult } from '@/api/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
-interface FilingSearch {
-  companyId?: string;
-  fyId?: string;
-}
-
 export const Route = createFileRoute('/filing')({
   component: FilingPage,
-  validateSearch: (search: Record<string, unknown>): FilingSearch => ({
-    companyId: search.companyId as string | undefined,
-    fyId: search.fyId as string | undefined,
-  }),
 });
 
 function FilingPage() {
-  const { companyId, fyId } = Route.useSearch();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
-
-  const { data: fiscalYears } = useQuery({
-    queryKey: ['fiscal-years', activeCompanyId],
-    queryFn: () => fiscalYearsApi.list(activeCompanyId!),
-    enabled: !!activeCompanyId,
-  });
-
-  const activeFyId = fyId || fiscalYears?.find((fy) => fy.is_closed)?.id;
+  const { activeCompanyId, activeFyId } = useFiscalYear();
 
   if (!activeCompanyId || !activeFyId) {
     return (

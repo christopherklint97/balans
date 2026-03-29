@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { companiesApi, fiscalYearsApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import type { Company } from '@/api/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -67,6 +68,7 @@ function Dashboard() {
 
 function CompanyCard({ company }: { company: Company }) {
   const queryClient = useQueryClient();
+  const { setCompanyId, setFyId } = useFiscalYear();
   const [showFyForm, setShowFyForm] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(company.name);
@@ -182,11 +184,11 @@ function CompanyCard({ company }: { company: Company }) {
         )}
 
         <div className="flex flex-wrap gap-2 pt-2">
-          <Link to="/accounts" search={{ companyId: company.id }}>
+          <Link to="/accounts" onClick={() => setCompanyId(company.id)}>
             <Button variant="outline" size="sm">Kontoplan</Button>
           </Link>
           {activeFy && (
-            <Link to="/vouchers" search={{ companyId: company.id, fyId: activeFy.id }}>
+            <Link to="/vouchers" onClick={() => { setCompanyId(company.id); setFyId(activeFy.id); }}>
               <Button variant="outline" size="sm">Verifikationer</Button>
             </Link>
           )}

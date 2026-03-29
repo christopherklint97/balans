@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { companiesApi, fiscalYearsApi, complianceApi } from '@/api/queries';
+import { complianceApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,38 +18,20 @@ import {
 } from '@/components/ui/table';
 
 interface ComplianceSearch {
-  companyId?: string;
-  fyId?: string;
   tab?: 'eligibility' | 'multiyear' | 'audit';
 }
 
 export const Route = createFileRoute('/compliance')({
   component: CompliancePage,
   validateSearch: (search: Record<string, unknown>): ComplianceSearch => ({
-    companyId: search.companyId as string | undefined,
-    fyId: search.fyId as string | undefined,
     tab: (search.tab as ComplianceSearch['tab']) || 'eligibility',
   }),
 });
 
 function CompliancePage() {
-  const { companyId, fyId, tab } = Route.useSearch();
+  const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
-
-  const { data: fiscalYears } = useQuery({
-    queryKey: ['fiscal-years', activeCompanyId],
-    queryFn: () => fiscalYearsApi.list(activeCompanyId!),
-    enabled: !!activeCompanyId,
-  });
-
-  const activeFyId = fyId || fiscalYears?.[0]?.id;
+  const { activeCompanyId, activeFyId } = useFiscalYear();
 
   if (!activeCompanyId) {
     return <p className="text-muted-foreground">Skapa ett företag först.</p>;
@@ -62,21 +45,21 @@ function CompliancePage() {
           <Button
             variant={tab === 'eligibility' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, tab: 'eligibility' } })}
+            onClick={() => navigate({ search: { tab: 'eligibility' } })}
           >
             K2-behörighet
           </Button>
           <Button
             variant={tab === 'multiyear' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, tab: 'multiyear' } })}
+            onClick={() => navigate({ search: { tab: 'multiyear' } })}
           >
             Flerårsöversikt
           </Button>
           <Button
             variant={tab === 'audit' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, tab: 'audit' } })}
+            onClick={() => navigate({ search: { tab: 'audit' } })}
           >
             Ändringslogg
           </Button>

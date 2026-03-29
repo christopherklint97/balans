@@ -4,6 +4,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './auth/context';
 import { ThemeProvider } from './hooks/use-theme';
+import { FiscalYearProvider } from './hooks/use-fiscal-year';
 import { routeTree } from './routeTree.gen';
 import './index.css';
 
@@ -29,7 +30,9 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <RouterProvider router={router} />
+          <FiscalYearProvider>
+            <RouterProvider router={router} />
+          </FiscalYearProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>

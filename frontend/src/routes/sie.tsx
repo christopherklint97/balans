@@ -1,43 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useRef } from 'react';
-import { companiesApi, fiscalYearsApi, sieApi } from '@/api/queries';
+import { sieApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import type { SieImportPreview, SieImportResult } from '@/api/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
-interface SieSearch {
-  companyId?: string;
-  fyId?: string;
-}
-
 export const Route = createFileRoute('/sie')({
   component: SiePage,
-  validateSearch: (search: Record<string, unknown>): SieSearch => ({
-    companyId: search.companyId as string | undefined,
-    fyId: search.fyId as string | undefined,
-  }),
 });
 
 function SiePage() {
-  const { companyId, fyId } = Route.useSearch();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
-
-  const { data: fiscalYears } = useQuery({
-    queryKey: ['fiscal-years', activeCompanyId],
-    queryFn: () => fiscalYearsApi.list(activeCompanyId!),
-    enabled: !!activeCompanyId,
-  });
-
-  const activeFyId = fyId || fiscalYears?.find((fy) => !fy.is_closed)?.id;
+  const { activeCompanyId, activeFyId } = useFiscalYear();
 
   if (!activeCompanyId) {
     return <p className="text-muted-foreground">Skapa ett företag först.</p>;

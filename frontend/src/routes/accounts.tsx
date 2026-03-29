@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { accountsApi, companiesApi } from '@/api/queries';
+import { accountsApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import type { Account } from '@/api/types';
 import {
   Table,
@@ -13,15 +14,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-interface AccountsSearch {
-  companyId?: string;
-}
-
 export const Route = createFileRoute('/accounts')({
   component: AccountsPage,
-  validateSearch: (search: Record<string, unknown>): AccountsSearch => ({
-    companyId: search.companyId as string | undefined,
-  }),
 });
 
 const ACCOUNT_CLASS_NAMES: Record<number, string> = {
@@ -44,14 +38,7 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 function AccountsPage() {
-  const { companyId } = Route.useSearch();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
+  const { activeCompanyId } = useFiscalYear();
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['accounts', activeCompanyId],

@@ -3,10 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useAuth } from '@/auth/context';
 import { useTheme } from '@/hooks/use-theme';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import { adminApi } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sun, Moon, Monitor, LayoutDashboard, BookOpen, Package, FileText, BarChart3, Lock, FileDown, Calculator, Send, ShieldCheck, Settings, LogOut } from 'lucide-react';
+import { Sun, Moon, Monitor, LayoutDashboard, BookOpen, Package, FileText, BarChart3, Lock, FileDown, Calculator, Send, ShieldCheck, Settings, LogOut, CalendarDays } from 'lucide-react';
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -64,6 +65,7 @@ function RootLayout() {
         </nav>
 
         <div className="border-t border-border px-3 py-3 space-y-2">
+          <FiscalYearSelector />
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground truncate">{user.name}</span>
             <ThemeToggle theme={theme} setTheme={setTheme} />
@@ -118,21 +120,24 @@ function RootLayout() {
                   <AdminNavLink />
                 </div>
               )}
-              <div className="pt-2 border-t border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{user.name}</span>
-                  <ThemeToggle theme={theme} setTheme={setTheme} />
+              <div className="pt-2 border-t border-border space-y-2">
+                <FiscalYearSelector />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{user.name}</span>
+                    <ThemeToggle theme={theme} setTheme={setTheme} />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      logout();
+                      navigate({ to: '/login' });
+                    }}
+                  >
+                    Logga ut
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    logout();
-                    navigate({ to: '/login' });
-                  }}
-                >
-                  Logga ut
-                </Button>
               </div>
             </div>
           )}
@@ -216,6 +221,46 @@ function MobileNavLink({ to, onClick, children }: { to: string; onClick?: () => 
     >
       {children}
     </Link>
+  );
+}
+
+function FiscalYearSelector() {
+  const { companies, fiscalYears, activeCompanyId, activeFyId, setCompanyId, setFyId } = useFiscalYear();
+
+  if (!companies.length) return null;
+
+  return (
+    <div className="space-y-1.5">
+      {companies.length > 1 && (
+        <select
+          value={activeCompanyId ?? ''}
+          onChange={(e) => setCompanyId(e.target.value)}
+          className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+        >
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {fiscalYears.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <select
+            value={activeFyId ?? ''}
+            onChange={(e) => setFyId(e.target.value)}
+            className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+          >
+            {fiscalYears.map((fy) => (
+              <option key={fy.id} value={fy.id}>
+                {fy.start_date} — {fy.end_date}{fy.is_closed ? ' (stängd)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
   );
 }
 

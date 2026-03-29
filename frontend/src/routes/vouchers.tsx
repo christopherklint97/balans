@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { vouchersApi, accountsApi, companiesApi, fiscalYearsApi, reportsApi, attachmentsApi } from '@/api/queries';
+import { vouchersApi, accountsApi, reportsApi, attachmentsApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import type { Account, AttachmentMeta, CreateVoucherLine, VoucherWithLines } from '@/api/types';
 import {
   Table,
@@ -19,8 +20,6 @@ import { Separator } from '@/components/ui/separator';
 import { formatSEK, parseSEK, normalizeAmountInput } from '@/lib/format';
 
 interface VouchersSearch {
-  companyId?: string;
-  fyId?: string;
   view?: 'list' | 'new' | 'balance' | 'detail';
   voucherId?: string;
 }
@@ -28,32 +27,15 @@ interface VouchersSearch {
 export const Route = createFileRoute('/vouchers')({
   component: VouchersPage,
   validateSearch: (search: Record<string, unknown>): VouchersSearch => ({
-    companyId: search.companyId as string | undefined,
-    fyId: search.fyId as string | undefined,
     view: (search.view as VouchersSearch['view']) || 'list',
     voucherId: search.voucherId as string | undefined,
   }),
 });
 
 function VouchersPage() {
-  const { companyId, fyId, view, voucherId } = Route.useSearch();
+  const { view, voucherId } = Route.useSearch();
   const navigate = Route.useNavigate();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
-
-  const { data: fiscalYears } = useQuery({
-    queryKey: ['fiscal-years', activeCompanyId],
-    queryFn: () => fiscalYearsApi.list(activeCompanyId!),
-    enabled: !!activeCompanyId,
-  });
-
-  const activeFyId = fyId || fiscalYears?.find((fy) => !fy.is_closed)?.id;
-  const activeFy = fiscalYears?.find((fy) => fy.id === activeFyId);
+  const { activeCompanyId, activeFyId, activeFy } = useFiscalYear();
 
   if (!activeCompanyId || !activeFyId) {
     return <p className="text-muted-foreground">Skapa ett företag och räkenskapsår först.</p>;
@@ -67,21 +49,21 @@ function VouchersPage() {
           <Button
             variant={view === 'list' || view === 'detail' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, view: 'list' } })}
+            onClick={() => navigate({ search: { view: 'list' } })}
           >
             Lista
           </Button>
           <Button
             variant={view === 'new' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, view: 'new' } })}
+            onClick={() => navigate({ search: { view: 'new' } })}
           >
             Ny verifikation
           </Button>
           <Button
             variant={view === 'balance' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, view: 'balance' } })}
+            onClick={() => navigate({ search: { view: 'balance' } })}
           >
             Saldobalans
           </Button>
@@ -92,7 +74,7 @@ function VouchersPage() {
         <VoucherForm
           companyId={activeCompanyId}
           fyId={activeFyId}
-          onSuccess={() => navigate({ search: { companyId, fyId, view: 'list' } })}
+          onSuccess={() => navigate({ search: { view: 'list' } })}
         />
       ) : view === 'balance' ? (
         <TrialBalance fyId={activeFyId} />
@@ -102,12 +84,12 @@ function VouchersPage() {
           companyId={activeCompanyId}
           fyId={activeFyId}
           isFyClosed={activeFy?.is_closed ?? false}
-          onBack={() => navigate({ search: { companyId, fyId, view: 'list' } })}
+          onBack={() => navigate({ search: { view: 'list' } })}
         />
       ) : (
         <VoucherList
           fyId={activeFyId}
-          onSelect={(id) => navigate({ search: { companyId, fyId, view: 'detail', voucherId: id } })}
+          onSelect={(id) => navigate({ search: { view: 'detail', voucherId: id } })}
         />
       )}
     </div>
@@ -216,8 +198,6 @@ function VoucherDetail({
 }) {
   const queryClient = useQueryClient();
   const navigate = Route.useNavigate();
-  const { companyId: searchCompanyId, fyId: searchFyId } = Route.useSearch();
-
   const { data: voucher, isLoading } = useQuery({
     queryKey: ['voucher', voucherId],
     queryFn: () => vouchersApi.get(voucherId),
@@ -255,8 +235,6 @@ function VoucherDetail({
       queryClient.invalidateQueries({ queryKey: ['trial-balance', fyId] });
       navigate({
         search: {
-          companyId: searchCompanyId,
-          fyId: searchFyId,
           view: 'detail' as const,
           voucherId: result.id,
         },

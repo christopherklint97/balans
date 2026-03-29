@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { companiesApi, fiscalYearsApi, closingApi } from '@/api/queries';
+import { closingApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import type { ValidationResult, ClosingResult } from '@/api/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,37 +11,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-interface ClosingSearch {
-  companyId?: string;
-  fyId?: string;
-}
-
 export const Route = createFileRoute('/closing')({
   component: ClosingPage,
-  validateSearch: (search: Record<string, unknown>): ClosingSearch => ({
-    companyId: search.companyId as string | undefined,
-    fyId: search.fyId as string | undefined,
-  }),
 });
 
 function ClosingPage() {
-  const { companyId, fyId } = Route.useSearch();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
-
-  const { data: fiscalYears } = useQuery({
-    queryKey: ['fiscal-years', activeCompanyId],
-    queryFn: () => fiscalYearsApi.list(activeCompanyId!),
-    enabled: !!activeCompanyId,
-  });
-
-  const activeFyId = fyId || fiscalYears?.find((fy) => !fy.is_closed)?.id;
-  const activeFy = fiscalYears?.find((fy) => fy.id === activeFyId);
+  const { activeCompanyId, activeFyId, activeFy } = useFiscalYear();
 
   if (!activeCompanyId || !activeFyId || !activeFy) {
     return (

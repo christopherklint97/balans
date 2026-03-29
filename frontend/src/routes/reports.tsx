@@ -1,46 +1,27 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { companiesApi, fiscalYearsApi, annualReportApi } from '@/api/queries';
+import { annualReportApi } from '@/api/queries';
+import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 
 interface ReportsSearch {
-  companyId?: string;
-  fyId?: string;
   tab?: 'income' | 'balance' | 'full';
 }
 
 export const Route = createFileRoute('/reports')({
   component: ReportsPage,
   validateSearch: (search: Record<string, unknown>): ReportsSearch => ({
-    companyId: search.companyId as string | undefined,
-    fyId: search.fyId as string | undefined,
     tab: (search.tab as ReportsSearch['tab']) || 'income',
   }),
 });
 
 function ReportsPage() {
-  const { companyId, fyId, tab } = Route.useSearch();
+  const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
-
-  const { data: companies } = useQuery({
-    queryKey: ['companies'],
-    queryFn: companiesApi.list,
-  });
-
-  const activeCompanyId = companyId || companies?.[0]?.id;
-
-  const { data: fiscalYears } = useQuery({
-    queryKey: ['fiscal-years', activeCompanyId],
-    queryFn: () => fiscalYearsApi.list(activeCompanyId!),
-    enabled: !!activeCompanyId,
-  });
-
-  // Prefer closed fiscal year for reports, fall back to open one
-  const activeFyId =
-    fyId || fiscalYears?.find((fy) => fy.is_closed)?.id || fiscalYears?.[0]?.id;
+  const { activeCompanyId, activeFyId } = useFiscalYear();
 
   if (!activeCompanyId || !activeFyId) {
     return <p className="text-muted-foreground">Skapa ett företag och räkenskapsår först.</p>;
@@ -54,21 +35,21 @@ function ReportsPage() {
           <Button
             variant={tab === 'income' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, tab: 'income' } })}
+            onClick={() => navigate({ search: { tab: 'income' } })}
           >
             Resultaträkning
           </Button>
           <Button
             variant={tab === 'balance' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, tab: 'balance' } })}
+            onClick={() => navigate({ search: { tab: 'balance' } })}
           >
             Balansräkning
           </Button>
           <Button
             variant={tab === 'full' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => navigate({ search: { companyId, fyId, tab: 'full' } })}
+            onClick={() => navigate({ search: { tab: 'full' } })}
           >
             Årsredovisning
           </Button>
