@@ -504,13 +504,13 @@ function VoucherForm({
         mutation.mutate();
       }}
     >
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-10rem)]">
         {/* Left: Form */}
-        <Card className="flex-1 min-w-0">
+        <Card className="flex-1 min-w-0 lg:w-1/2 lg:flex lg:flex-col lg:overflow-hidden">
           <CardHeader>
             <CardTitle className="text-base">Ny verifikation</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 lg:overflow-y-auto lg:flex-1">
             <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
               <div className="space-y-2">
                 <Label htmlFor="date">Datum</Label>
@@ -687,8 +687,8 @@ function VoucherForm({
         </Card>
 
         {/* Right: Underlag panel (desktop only) */}
-        <div className="hidden lg:block w-[400px] shrink-0">
-          <Card className="sticky top-4 h-[calc(100vh-8rem)] flex flex-col">
+        <div className="hidden lg:flex lg:w-1/2 lg:min-w-0">
+          <Card className="flex flex-col w-full overflow-hidden">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Underlag</CardTitle>
             </CardHeader>
