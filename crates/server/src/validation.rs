@@ -62,11 +62,20 @@ pub fn account_type_from_number(number: i32) -> &'static str {
         4..=7 => "expense",
         8 => {
             // 8xxx: financial items, appropriations, tax
-            // 83xx = financial income, 84xx = financial expense, etc.
-            if (8300..8400).contains(&number) || (8900..9000).contains(&number) {
-                "revenue"
-            } else {
-                "expense"
+            // Revenue: financial income (80xx-83xx income items, 8440, 8820, 8930, 89xx result)
+            // Expense: write-downs (8070, 8170, 8270, 8370), interest costs (84xx), dispositions (88xx), tax (891x)
+            match number / 100 {
+                80 => if number == 8070 { "expense" } else { "revenue" },
+                81 => if number == 8170 { "expense" } else { "revenue" },
+                82 => if number == 8270 { "expense" } else { "revenue" },
+                83 => if number == 8370 { "expense" } else { "revenue" },
+                84 => if number == 8440 { "revenue" } else { "expense" },
+                88 => if number == 8820 { "revenue" } else { "expense" },
+                89 => {
+                    // 8910-8920, 8940, 8980 = tax expense; 8930 = refund (revenue); 8990/8999 = result (revenue)
+                    if number >= 8990 || number == 8930 { "revenue" } else { "expense" }
+                }
+                _ => "expense",
             }
         }
         _ => "expense",
