@@ -436,6 +436,7 @@ function VoucherForm({
   ]);
   const [error, setError] = useState('');
   const [underlag, setUnderlag] = useState<UnderlagFile[]>([]);
+  const underlagInputRef = useRef<HTMLInputElement>(null);
 
   const { data: accounts } = useQuery({
     queryKey: ['accounts', companyId],
@@ -496,192 +497,289 @@ function VoucherForm({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Ny verifikation</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setError('');
-            mutation.mutate();
-          }}
-        >
-          <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError('');
+        mutation.mutate();
+      }}
+    >
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left: Form */}
+        <Card className="flex-1 min-w-0">
+          <CardHeader>
+            <CardTitle className="text-base">Ny verifikation</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
+              <div className="space-y-2">
+                <Label htmlFor="date">Datum</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="max-w-[150px]"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="desc">Beskrivning</Label>
+                <Input
+                  id="desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="T.ex. Kundbetalning faktura 1001"
+                  required
+                />
+              </div>
+            </div>
+
+            <Separator />
+
             <div className="space-y-2">
-              <Label htmlFor="date">Datum</Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="max-w-[150px]"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="desc">Beskrivning</Label>
-              <Input
-                id="desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="T.ex. Kundbetalning faktura 1001"
-                required
-              />
-            </div>
-          </div>
+              {/* Desktop header */}
+              <div className="hidden sm:grid grid-cols-[120px_1fr_120px_120px_40px] gap-2 text-sm font-medium text-muted-foreground">
+                <span>Konto</span>
+                <span>Kontonamn</span>
+                <span>Debet</span>
+                <span>Kredit</span>
+                <span></span>
+              </div>
 
-          <Separator />
-
-          <div className="space-y-2">
-            {/* Desktop header */}
-            <div className="hidden sm:grid grid-cols-[120px_1fr_120px_120px_40px] gap-2 text-sm font-medium text-muted-foreground">
-              <span>Konto</span>
-              <span>Kontonamn</span>
-              <span>Debet</span>
-              <span>Kredit</span>
-              <span></span>
-            </div>
-
-            {lines.map((line, i) => {
-              const matchedAccount = accounts?.find(
-                (a) => a.number === parseInt(line.account_number, 10),
-              );
-              return (
-                <div key={i}>
-                  {/* Desktop row */}
-                  <div className="hidden sm:grid grid-cols-[120px_1fr_120px_120px_40px] gap-2">
-                    <AccountAutocomplete
-                      value={line.account_number}
-                      onChange={(v) => updateLine(i, 'account_number', v)}
-                      accounts={accounts}
-                      placeholder="1910"
-                      className="font-mono"
-                    />
-                    <span className="flex items-center text-sm text-muted-foreground truncate">
-                      {matchedAccount?.name || ''}
-                    </span>
-                    <AmountInput
-                      value={line.debit}
-                      onChange={(v) => {
-                        updateLine(i, 'debit', v);
-                        if (v) updateLine(i, 'credit', '');
-                      }}
-                      placeholder="0,00"
-                      className="font-mono text-right"
-                    />
-                    <AmountInput
-                      value={line.credit}
-                      onChange={(v) => {
-                        updateLine(i, 'credit', v);
-                        if (v) updateLine(i, 'debit', '');
-                      }}
-                      placeholder="0,00"
-                      className="font-mono text-right"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeLine(i)}
-                      disabled={lines.length <= 2}
-                      className="text-muted-foreground"
-                    >
-                      x
-                    </Button>
-                  </div>
-
-                  {/* Mobile card */}
-                  <div className="sm:hidden rounded-md border border-border p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <AccountAutocomplete
-                          value={line.account_number}
-                          onChange={(v) => updateLine(i, 'account_number', v)}
-                          accounts={accounts}
-                          placeholder="Konto"
-                          className="font-mono w-20"
-                        />
-                        <span className="text-sm text-muted-foreground truncate">
-                          {matchedAccount?.name || ''}
-                        </span>
-                      </div>
+              {lines.map((line, i) => {
+                const matchedAccount = accounts?.find(
+                  (a) => a.number === parseInt(line.account_number, 10),
+                );
+                return (
+                  <div key={i}>
+                    {/* Desktop row */}
+                    <div className="hidden sm:grid grid-cols-[120px_1fr_120px_120px_40px] gap-2">
+                      <AccountAutocomplete
+                        value={line.account_number}
+                        onChange={(v) => updateLine(i, 'account_number', v)}
+                        accounts={accounts}
+                        placeholder="1910"
+                        className="font-mono"
+                      />
+                      <span className="flex items-center text-sm text-muted-foreground truncate">
+                        {matchedAccount?.name || ''}
+                      </span>
+                      <AmountInput
+                        value={line.debit}
+                        onChange={(v) => {
+                          updateLine(i, 'debit', v);
+                          if (v) updateLine(i, 'credit', '');
+                        }}
+                        placeholder="0,00"
+                        className="font-mono text-right"
+                      />
+                      <AmountInput
+                        value={line.credit}
+                        onChange={(v) => {
+                          updateLine(i, 'credit', v);
+                          if (v) updateLine(i, 'debit', '');
+                        }}
+                        placeholder="0,00"
+                        className="font-mono text-right"
+                      />
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => removeLine(i)}
                         disabled={lines.length <= 2}
-                        className="text-muted-foreground shrink-0"
+                        className="text-muted-foreground"
                       >
                         x
                       </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Debet</span>
-                        <AmountInput
-                          value={line.debit}
-                          onChange={(v) => {
-                            updateLine(i, 'debit', v);
-                            if (v) updateLine(i, 'credit', '');
-                          }}
-                          placeholder="0,00"
-                          className="font-mono text-right"
-                        />
+
+                    {/* Mobile card */}
+                    <div className="sm:hidden rounded-md border border-border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <AccountAutocomplete
+                            value={line.account_number}
+                            onChange={(v) => updateLine(i, 'account_number', v)}
+                            accounts={accounts}
+                            placeholder="Konto"
+                            className="font-mono w-20"
+                          />
+                          <span className="text-sm text-muted-foreground truncate">
+                            {matchedAccount?.name || ''}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeLine(i)}
+                          disabled={lines.length <= 2}
+                          className="text-muted-foreground shrink-0"
+                        >
+                          x
+                        </Button>
                       </div>
-                      <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Kredit</span>
-                        <AmountInput
-                          value={line.credit}
-                          onChange={(v) => {
-                            updateLine(i, 'credit', v);
-                            if (v) updateLine(i, 'debit', '');
-                          }}
-                          placeholder="0,00"
-                          className="font-mono text-right"
-                        />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Debet</span>
+                          <AmountInput
+                            value={line.debit}
+                            onChange={(v) => {
+                              updateLine(i, 'debit', v);
+                              if (v) updateLine(i, 'credit', '');
+                            }}
+                            placeholder="0,00"
+                            className="font-mono text-right"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Kredit</span>
+                          <AmountInput
+                            value={line.credit}
+                            onChange={(v) => {
+                              updateLine(i, 'credit', v);
+                              if (v) updateLine(i, 'debit', '');
+                            }}
+                            placeholder="0,00"
+                            className="font-mono text-right"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
 
-            <Button type="button" variant="outline" size="sm" onClick={addLine}>
-              + Lägg till rad
-            </Button>
-          </div>
-
-          <Separator />
-
-          <UnderlagUpload files={underlag} onChange={setUnderlag} />
-
-          <Separator />
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-              <span>
-                Debet: <span className="font-mono font-medium">{formatSEK(totalDebit)}</span>
-              </span>
-              <span>
-                Kredit: <span className="font-mono font-medium">{formatSEK(totalCredit)}</span>
-              </span>
-              <span className={isBalanced ? 'text-green-600' : 'text-destructive'}>
-                Diff: {formatSEK(totalDebit - totalCredit)}
-              </span>
+              <Button type="button" variant="outline" size="sm" onClick={addLine}>
+                + Lägg till rad
+              </Button>
             </div>
-            <Button type="submit" disabled={!isBalanced || mutation.isPending || !description} className="w-full sm:w-auto">
-              {mutation.isPending ? 'Sparar...' : 'Bokför'}
-            </Button>
-          </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
-        </form>
-      </CardContent>
-    </Card>
+            {/* Mobile only: show underlag inline */}
+            <div className="lg:hidden">
+              <Separator />
+              <UnderlagUpload files={underlag} onChange={setUnderlag} />
+            </div>
+
+            <Separator />
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <span>
+                  Debet: <span className="font-mono font-medium">{formatSEK(totalDebit)}</span>
+                </span>
+                <span>
+                  Kredit: <span className="font-mono font-medium">{formatSEK(totalCredit)}</span>
+                </span>
+                <span className={isBalanced ? 'text-green-600' : 'text-destructive'}>
+                  Diff: {formatSEK(totalDebit - totalCredit)}
+                </span>
+              </div>
+              <Button type="submit" disabled={!isBalanced || mutation.isPending || !description} className="w-full sm:w-auto">
+                {mutation.isPending ? 'Sparar...' : 'Bokför'}
+              </Button>
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </CardContent>
+        </Card>
+
+        {/* Right: Underlag panel (desktop only) */}
+        <div className="hidden lg:block w-[400px] shrink-0">
+          <Card className="sticky top-4 h-[calc(100vh-8rem)] flex flex-col">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Underlag</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto space-y-3">
+              {underlag.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => underlagInputRef.current?.click()}
+                  className="w-full h-48 rounded-md border-2 border-dashed border-border hover:border-ring flex flex-col items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span className="text-sm mt-2">Lägg till underlag</span>
+                </button>
+              ) : (
+                <>
+                  {underlag.map((f, i) => (
+                    <div key={i} className="relative group">
+                      <div className="w-full rounded-md border border-border overflow-hidden bg-muted">
+                        {f.preview && f.file.type.startsWith('image/') ? (
+                          <img src={f.preview} alt={f.file.name} className="w-full object-contain max-h-[500px]" />
+                        ) : f.preview && f.file.type === 'application/pdf' ? (
+                          <iframe
+                            src={`${f.preview}#toolbar=0&navpanes=0`}
+                            title={f.file.name}
+                            className="w-full h-[500px] border-0"
+                          />
+                        ) : (
+                          <div className="text-center p-6">
+                            <svg className="w-10 h-10 mx-auto text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-sm text-muted-foreground mt-2 block">{f.file.name}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-muted-foreground truncate">{f.file.name}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const removed = underlag[i];
+                            if (removed.preview) URL.revokeObjectURL(removed.preview);
+                            setUnderlag(underlag.filter((_, j) => j !== i));
+                          }}
+                          className="text-xs text-muted-foreground hover:text-destructive transition-colors shrink-0 ml-2"
+                        >
+                          Ta bort
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => underlagInputRef.current?.click()}
+                    className="w-full h-16 rounded-md border-2 border-dashed border-border hover:border-ring flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span className="text-sm">Lägg till fler</span>
+                  </button>
+                </>
+              )}
+              <input
+                ref={underlagInputRef}
+                type="file"
+                multiple
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const newFiles: UnderlagFile[] = [];
+                    for (const file of Array.from(e.target.files)) {
+                      let preview: string | null = null;
+                      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+                        preview = URL.createObjectURL(file);
+                      }
+                      newFiles.push({ file, preview });
+                    }
+                    setUnderlag([...underlag, ...newFiles]);
+                  }
+                  e.target.value = '';
+                }}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </form>
   );
 }
 
