@@ -1,11 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { annualReportApi } from '@/api/queries';
 import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 
 interface ReportsSearch {
   tab?: 'income' | 'balance' | 'full';
@@ -162,16 +164,97 @@ function BalanceSheetView({ fyId }: { fyId: string }) {
   );
 }
 
+function EditableTextField({
+  label,
+  value,
+  editing,
+  editValue,
+  onEdit,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  label: string;
+  value: string;
+  editing: boolean;
+  editValue: string;
+  onEdit: () => void;
+  onChange: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  if (editing) {
+    return (
+      <div>
+        <p className="font-semibold mb-1">{label}</p>
+        <Textarea
+          value={editValue}
+          onChange={(e) => onChange(e.target.value)}
+          rows={3}
+          className="text-sm"
+        />
+        <div className="flex gap-2 mt-1">
+          <Button size="sm" variant="default" onClick={onSave}>
+            Spara
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onCancel}>
+            Avbryt
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="group cursor-pointer rounded-md p-2 -m-2 hover:bg-muted/50 transition-colors"
+      onClick={onEdit}
+    >
+      <p className="font-semibold">{label}</p>
+      <p className="text-muted-foreground whitespace-pre-line">{value}</p>
+      <p className="text-xs text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+        Klicka för att redigera
+      </p>
+    </div>
+  );
+}
+
 function AnnualReportView({ fyId }: { fyId: string }) {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['annual-report', fyId],
     queryFn: () => annualReportApi.full(fyId),
+  });
+
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const saveMutation = useMutation({
+    mutationFn: (texts: Record<string, string | null>) =>
+      annualReportApi.updateTexts(fyId, texts),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['annual-report', fyId] });
+      setEditingField(null);
+    },
   });
 
   if (isLoading) return <p className="text-muted-foreground">Laddar årsredovisning...</p>;
   if (!data) return null;
 
   const dr = data.directors_report;
+
+  const startEdit = (field: string, currentValue: string) => {
+    setEditingField(field);
+    setEditValue(currentValue);
+  };
+
+  const saveField = (field: string) => {
+    saveMutation.mutate({
+      business_description: field === 'business_description' ? editValue : dr.business_description,
+      important_events: field === 'important_events' ? editValue : dr.important_events,
+      future_outlook: field === 'future_outlook' ? editValue : dr.future_outlook,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -207,18 +290,36 @@ function AnnualReportView({ fyId }: { fyId: string }) {
           <CardTitle className="text-base">Förvaltningsberättelse</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          <div>
-            <p className="font-semibold">Verksamheten</p>
-            <p className="text-muted-foreground">{dr.business_description}</p>
-          </div>
-          <div>
-            <p className="font-semibold">Väsentliga händelser</p>
-            <p className="text-muted-foreground">{dr.important_events}</p>
-          </div>
-          <div>
-            <p className="font-semibold">Framtida utveckling</p>
-            <p className="text-muted-foreground">{dr.future_outlook}</p>
-          </div>
+          <EditableTextField
+            label="Verksamheten"
+            value={dr.business_description}
+            editing={editingField === 'business_description'}
+            editValue={editValue}
+            onEdit={() => startEdit('business_description', dr.business_description)}
+            onChange={setEditValue}
+            onSave={() => saveField('business_description')}
+            onCancel={() => setEditingField(null)}
+          />
+          <EditableTextField
+            label="Väsentliga händelser"
+            value={dr.important_events}
+            editing={editingField === 'important_events'}
+            editValue={editValue}
+            onEdit={() => startEdit('important_events', dr.important_events)}
+            onChange={setEditValue}
+            onSave={() => saveField('important_events')}
+            onCancel={() => setEditingField(null)}
+          />
+          <EditableTextField
+            label="Framtida utveckling"
+            value={dr.future_outlook}
+            editing={editingField === 'future_outlook'}
+            editValue={editValue}
+            onEdit={() => startEdit('future_outlook', dr.future_outlook)}
+            onChange={setEditValue}
+            onSave={() => saveField('future_outlook')}
+            onCancel={() => setEditingField(null)}
+          />
           {dr.profit_allocation && (
             <div>
               <p className="font-semibold">Förslag till vinstdisposition</p>

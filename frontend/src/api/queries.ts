@@ -20,6 +20,7 @@ import type {
   IncomeStatement,
   BalanceSheet,
   AnnualReport,
+  DirectorsReportTexts,
   EligibilityResult,
   MultiYearOverview,
   AuditEntry,
@@ -138,6 +139,10 @@ export const annualReportApi = {
   balanceSheet: (fyId: string) => get<BalanceSheet>(`/fiscal-years/${fyId}/balance-sheet`),
   full: (fyId: string) => get<AnnualReport>(`/fiscal-years/${fyId}/annual-report`),
   pdfUrl: (fyId: string) => `/api/fiscal-years/${fyId}/annual-report/pdf`,
+  getTexts: (fyId: string) =>
+    get<DirectorsReportTexts>(`/fiscal-years/${fyId}/directors-report-texts`),
+  updateTexts: (fyId: string, data: Partial<DirectorsReportTexts>) =>
+    put<DirectorsReportTexts>(`/fiscal-years/${fyId}/directors-report-texts`, data),
 };
 
 // Compliance

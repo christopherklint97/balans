@@ -110,14 +110,35 @@ pub async fn build_annual_report(
         None
     };
 
+    // Check for user-edited texts
+    let saved_texts = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+        "SELECT business_description, important_events, future_outlook FROM directors_report_texts WHERE fiscal_year_id = ?",
+    )
+    .bind(fiscal_year_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let default_business = format!(
+        "{} bedriver verksamhet med säte i {}.",
+        company.name,
+        company.city.as_deref().unwrap_or("Sverige")
+    );
+    let default_events = "Inga väsentliga händelser att rapportera.".to_string();
+    let default_outlook = "Bolaget bedömer att verksamheten kommer att fortsätta i oförändrad omfattning.".to_string();
+
     let directors_report = DirectorsReport {
-        business_description: format!(
-            "{} bedriver verksamhet med säte i {}.",
-            company.name,
-            company.city.as_deref().unwrap_or("Sverige")
-        ),
-        important_events: "Inga väsentliga händelser att rapportera.".into(),
-        future_outlook: "Bolaget bedömer att verksamheten kommer att fortsätta i oförändrad omfattning.".into(),
+        business_description: saved_texts
+            .as_ref()
+            .and_then(|t| t.0.clone())
+            .unwrap_or(default_business),
+        important_events: saved_texts
+            .as_ref()
+            .and_then(|t| t.1.clone())
+            .unwrap_or(default_events),
+        future_outlook: saved_texts
+            .as_ref()
+            .and_then(|t| t.2.clone())
+            .unwrap_or(default_outlook),
         profit_allocation,
     };
 

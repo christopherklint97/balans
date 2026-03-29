@@ -3,9 +3,10 @@ use axum::{
     extract::{Extension, Path, State},
     http::{header, StatusCode},
     response::Response,
-    routing::get,
+    routing::{get, put},
     Json, Router,
 };
+use serde::Deserialize;
 use sqlx::SqlitePool;
 use crate::access::verify_fiscal_year_access;
 use crate::auth::middleware::AuthUser;
@@ -34,6 +35,10 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/fiscal-years/{fy_id}/annual-report/pdf",
             get(annual_report_pdf_handler),
+        )
+        .route(
+            "/fiscal-years/{fy_id}/directors-report-texts",
+            get(get_directors_report_texts).put(put_directors_report_texts),
         )
 }
 
@@ -97,6 +102,75 @@ async fn annual_report_pdf_handler(
         )
         .body(Body::from(pdf_bytes))
         .unwrap())
+}
+
+#[derive(Debug, Deserialize)]
+struct DirectorsReportTextsInput {
+    business_description: Option<String>,
+    important_events: Option<String>,
+    future_outlook: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct DirectorsReportTextsOutput {
+    business_description: Option<String>,
+    important_events: Option<String>,
+    future_outlook: Option<String>,
+}
+
+async fn get_directors_report_texts(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+    Path(fy_id): Path<String>,
+) -> Result<Json<DirectorsReportTextsOutput>, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "viewer").await?;
+
+    let row = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+        "SELECT business_description, important_events, future_outlook FROM directors_report_texts WHERE fiscal_year_id = ?",
+    )
+    .bind(&fy_id)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let (bd, ie, fo) = row.unwrap_or((None, None, None));
+    Ok(Json(DirectorsReportTextsOutput {
+        business_description: bd,
+        important_events: ie,
+        future_outlook: fo,
+    }))
+}
+
+async fn put_directors_report_texts(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+    Path(fy_id): Path<String>,
+    Json(input): Json<DirectorsReportTextsInput>,
+) -> Result<Json<DirectorsReportTextsOutput>, AppError> {
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &fy_id, "member").await?;
+
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO directors_report_texts (id, fiscal_year_id, business_description, important_events, future_outlook)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(fiscal_year_id) DO UPDATE SET
+           business_description = excluded.business_description,
+           important_events = excluded.important_events,
+           future_outlook = excluded.future_outlook,
+           updated_at = datetime('now')",
+    )
+    .bind(&id)
+    .bind(&fy_id)
+    .bind(&input.business_description)
+    .bind(&input.important_events)
+    .bind(&input.future_outlook)
+    .execute(&state.pool)
+    .await?;
+
+    Ok(Json(DirectorsReportTextsOutput {
+        business_description: input.business_description,
+        important_events: input.important_events,
+        future_outlook: input.future_outlook,
+    }))
 }
 
 /// Find the previous fiscal year ID for comparative figures.

@@ -413,6 +413,12 @@ export interface AuditEntry {
   created_at: string;
 }
 
+export interface DirectorsReportTexts {
+  business_description: string | null;
+  important_events: string | null;
+  future_outlook: string | null;
+}
+
 export interface AnnualReport {
   company: {
     name: string;
