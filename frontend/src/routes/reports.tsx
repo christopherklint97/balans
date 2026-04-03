@@ -260,11 +260,9 @@ function AnnualReportView({ fyId }: { fyId: string }) {
     <div className="space-y-6">
       {/* PDF download */}
       <div className="flex justify-end">
-        <a href={annualReportApi.pdfUrl(fyId)} download>
-          <Button variant="outline" size="sm">
-            Ladda ner PDF
-          </Button>
-        </a>
+        <Button variant="outline" size="sm" onClick={() => annualReportApi.downloadPdf(fyId)}>
+          Ladda ner PDF
+        </Button>
       </div>
 
       {/* Header */}

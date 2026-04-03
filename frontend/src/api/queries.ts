@@ -138,7 +138,20 @@ export const annualReportApi = {
     get<IncomeStatement>(`/fiscal-years/${fyId}/income-statement`),
   balanceSheet: (fyId: string) => get<BalanceSheet>(`/fiscal-years/${fyId}/balance-sheet`),
   full: (fyId: string) => get<AnnualReport>(`/fiscal-years/${fyId}/annual-report`),
-  pdfUrl: (fyId: string) => `/api/fiscal-years/${fyId}/annual-report/pdf`,
+  downloadPdf: async (fyId: string) => {
+    const token = localStorage.getItem('balans_token');
+    const res = await fetch(`/api/fiscal-years/${fyId}/annual-report/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to download PDF');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'arsredovisning.pdf';
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   getTexts: (fyId: string) =>
     get<DirectorsReportTexts>(`/fiscal-years/${fyId}/directors-report-texts`),
   updateTexts: (fyId: string, data: Partial<DirectorsReportTexts>) =>
