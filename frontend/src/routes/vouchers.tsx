@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { vouchersApi, accountsApi, reportsApi, attachmentsApi } from '@/api/queries';
 import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import type { Account, AttachmentMeta, CreateVoucherLine, VoucherWithLines } from '@/api/types';
@@ -148,7 +149,9 @@ function AttachmentPreview({ voucherId, attachment }: { voucherId: string; attac
     fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('Failed'))))
+      .then((res) =>
+        res.ok ? res.blob() : Promise.reject(new Error('Kunde inte ladda bilaga')),
+      )
       .then((blob) => {
         if (!cancelled) {
           const objectUrl = URL.createObjectURL(blob);
@@ -156,7 +159,9 @@ function AttachmentPreview({ voucherId, attachment }: { voucherId: string; attac
           setBlobUrl(objectUrl);
         }
       })
-      .catch(() => {});
+      .catch((err: Error) => {
+        if (!cancelled) toast.error(err.message);
+      });
     return () => {
       cancelled = true;
       if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
@@ -694,13 +699,18 @@ function VoucherForm({
           formData.append('file', u.file);
           try {
             const token = localStorage.getItem('balans_token');
-            await fetch(`/api/vouchers/${result.id}/attachments`, {
+            const res = await fetch(`/api/vouchers/${result.id}/attachments`, {
               method: 'POST',
               headers: token ? { Authorization: `Bearer ${token}` } : {},
               body: formData,
             });
-          } catch {
-            // Attachment upload failed silently — voucher was still created
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({ error: res.statusText }));
+              throw new Error(body.error || res.statusText);
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Kunde inte ladda upp bilaga';
+            toast.error(`${u.file.name}: ${msg}`);
           }
         }
       }

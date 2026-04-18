@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { annualReportApi } from '@/api/queries';
 import { useFiscalYear } from '@/hooks/use-fiscal-year';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -260,7 +261,15 @@ function AnnualReportView({ fyId }: { fyId: string }) {
     <div className="space-y-6">
       {/* PDF download */}
       <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={() => annualReportApi.downloadPdf(fyId)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            annualReportApi.downloadPdf(fyId).catch((err: Error) => {
+              toast.error(err.message || 'Kunde inte ladda ner PDF');
+            });
+          }}
+        >
           Ladda ner PDF
         </Button>
       </div>

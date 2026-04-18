@@ -143,7 +143,10 @@ export const annualReportApi = {
     const res = await fetch(`/api/fiscal-years/${fyId}/annual-report/pdf`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    if (!res.ok) throw new Error('Failed to download PDF');
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || 'Kunde inte ladda ner PDF');
+    }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
