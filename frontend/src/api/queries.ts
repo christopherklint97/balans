@@ -149,8 +149,12 @@ export const annualReportApi = {
     const a = document.createElement('a');
     a.href = url;
     a.download = 'arsredovisning.pdf';
+    a.rel = 'noopener';
+    a.target = '_blank';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
   getTexts: (fyId: string) =>
     get<DirectorsReportTexts>(`/fiscal-years/${fyId}/directors-report-texts`),
