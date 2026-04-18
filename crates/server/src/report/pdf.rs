@@ -10,23 +10,11 @@ use crate::money::Money;
 
 /// Generate a PDF for the annual report.
 pub fn generate_pdf(report: &AnnualReport) -> Result<Vec<u8>, String> {
-    let font =
-        fonts::from_files("./fonts", "LiberationSans", None).unwrap_or_else(|_| {
-            // Fallback: try system font paths
-            fonts::from_files("/usr/share/fonts/truetype/liberation", "LiberationSans", None)
-                .unwrap_or_else(|_| {
-                    fonts::from_files(
-                        "/usr/share/fonts/liberation-sans",
-                        "LiberationSans",
-                        None,
-                    )
-                    .unwrap_or_else(|_| {
-                        // Use built-in font as last resort
-                        genpdf::fonts::from_files("/usr/share/fonts", "DejaVuSans", None)
-                            .expect("No suitable font found. Install liberation-fonts or dejavu-fonts.")
-                    })
-                })
-        });
+    let font = fonts::from_files("./fonts", "LiberationSans", None)
+        .or_else(|_| fonts::from_files("/usr/share/fonts/truetype/liberation", "LiberationSans", None))
+        .or_else(|_| fonts::from_files("/usr/share/fonts/liberation-sans", "LiberationSans", None))
+        .or_else(|_| fonts::from_files("/usr/share/fonts", "DejaVuSans", None))
+        .map_err(|e| format!("No suitable font found. Install fonts-liberation or fonts-dejavu: {e}"))?;
 
     let mut doc = Document::new(font);
     doc.set_title(format!(
