@@ -21,7 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatSEK, parseSEK, normalizeAmountInput } from '@/lib/format';
 
 interface VouchersSearch {
-  view?: 'list' | 'new' | 'balance' | 'detail';
+  view?: 'list' | 'new' | 'balance' | 'detail' | 'correct';
   voucherId?: string;
 }
 
@@ -87,6 +87,14 @@ function VouchersPage() {
           isFyClosed={activeFy?.is_closed ?? false}
           onBack={() => navigate({ search: { view: 'list' } })}
         />
+      ) : view === 'correct' && voucherId ? (
+        <CorrectVoucherForm
+          voucherId={voucherId}
+          companyId={activeCompanyId}
+          fyId={activeFyId}
+          onSuccess={(newVoucherId) => navigate({ search: { view: 'detail', voucherId: newVoucherId } })}
+          onCancel={() => navigate({ search: { view: 'detail', voucherId } })}
+        />
       ) : (
         <VoucherList
           fyId={activeFyId}
@@ -121,7 +129,7 @@ function VoucherList({ fyId, onSelect }: { fyId: string; onSelect: (id: string) 
             {vouchers.map((v) => (
               <TableRow
                 key={v.id}
-                className="cursor-pointer"
+                className={`cursor-pointer ${v.is_voided ? 'opacity-60 line-through' : ''}`}
                 onClick={() => onSelect(v.id)}
               >
                 <TableCell className="font-mono">{v.voucher_number}</TableCell>
@@ -282,6 +290,18 @@ function VoucherDetail({
             </div>
           </div>
 
+          {voucher.is_voided && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+              Strykt{voucher.voided_at ? ` ${voucher.voided_at}` : ''}.
+              {voucher.corrected_by_voucher_id ? ' En korrigerad verifikation har skapats.' : ''}
+            </div>
+          )}
+          {voucher.corrects_voucher_id && (
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              Denna verifikation ersätter en tidigare struken verifikation.
+            </div>
+          )}
+
           <Separator />
 
           {/* Voucher lines table */}
@@ -319,8 +339,15 @@ function VoucherDetail({
           <Separator />
 
           {/* Stryka section */}
-          {!isFyClosed && (
+          {!isFyClosed && !voucher.is_voided && (
             <div className="space-y-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate({ search: { view: 'correct' as const, voucherId: voucher.id } })}
+              >
+                Korrigera verifikation
+              </Button>
               {!showConfirm ? (
                 <Button
                   variant="destructive"
@@ -651,19 +678,68 @@ interface VoucherLineInput {
   credit: string;
 }
 
-function VoucherForm({
+function CorrectVoucherForm({
+  voucherId,
   companyId,
   fyId,
   onSuccess,
+  onCancel,
+}: {
+  voucherId: string;
+  companyId: string;
+  fyId: string;
+  onSuccess: (newVoucherId: string) => void;
+  onCancel: () => void;
+}) {
+  const { data: voucher, isLoading } = useQuery({
+    queryKey: ['voucher', voucherId],
+    queryFn: () => vouchersApi.get(voucherId),
+  });
+
+  if (isLoading) return <p className="text-muted-foreground">Laddar...</p>;
+  if (!voucher) return <p className="text-muted-foreground">Verifikationen hittades inte.</p>;
+
+  return (
+    <VoucherForm
+      companyId={companyId}
+      fyId={fyId}
+      correctionOfVoucherId={voucherId}
+      initialDate={voucher.date}
+      initialDescription={voucher.description}
+      initialLines={voucher.lines.map((line) => ({
+        account_number: line.account_number.toString(),
+        debit: parseFloat(line.debit) > 0 ? line.debit : '',
+        credit: parseFloat(line.credit) > 0 ? line.credit : '',
+      }))}
+      onSuccess={onSuccess}
+      onCancel={onCancel}
+    />
+  );
+}
+
+function VoucherForm({
+  companyId,
+  fyId,
+  correctionOfVoucherId,
+  initialDate,
+  initialDescription,
+  initialLines,
+  onSuccess,
+  onCancel,
 }: {
   companyId: string;
   fyId: string;
-  onSuccess: () => void;
+  correctionOfVoucherId?: string;
+  initialDate?: string;
+  initialDescription?: string;
+  initialLines?: VoucherLineInput[];
+  onSuccess: (voucherId: string) => void;
+  onCancel?: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [description, setDescription] = useState('');
-  const [lines, setLines] = useState<VoucherLineInput[]>([
+  const [date, setDate] = useState(initialDate ?? new Date().toISOString().slice(0, 10));
+  const [description, setDescription] = useState(initialDescription ?? '');
+  const [lines, setLines] = useState<VoucherLineInput[]>(initialLines ?? [
     { account_number: '', debit: '', credit: '' },
     { account_number: '', debit: '', credit: '' },
   ]);
@@ -689,7 +765,10 @@ function VoucherForm({
           debit: (parseSEK(l.debit)).toFixed(2),
           credit: (parseSEK(l.credit)).toFixed(2),
         }));
-      return vouchersApi.create(fyId, { date, description, lines: voucherLines });
+      const payload = { date, description, lines: voucherLines };
+      return correctionOfVoucherId
+        ? vouchersApi.correct(correctionOfVoucherId, payload)
+        : vouchersApi.create(fyId, payload);
     },
     onSuccess: async (result) => {
       // Upload underlag files if any
@@ -715,7 +794,12 @@ function VoucherForm({
         }
       }
       queryClient.invalidateQueries({ queryKey: ['vouchers', fyId] });
-      onSuccess();
+      queryClient.invalidateQueries({ queryKey: ['voucher', correctionOfVoucherId] });
+      queryClient.invalidateQueries({ queryKey: ['trial-balance', fyId] });
+      queryClient.invalidateQueries({ queryKey: ['income-statement', fyId] });
+      queryClient.invalidateQueries({ queryKey: ['balance-sheet', fyId] });
+      queryClient.invalidateQueries({ queryKey: ['annual-report', fyId] });
+      onSuccess(result.id);
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -746,7 +830,9 @@ function VoucherForm({
         {/* Left: Form */}
         <Card className="flex-1 min-w-0 lg:w-1/2 lg:flex lg:flex-col lg:overflow-hidden">
           <CardHeader>
-            <CardTitle className="text-base">Ny verifikation</CardTitle>
+            <CardTitle className="text-base">
+              {correctionOfVoucherId ? 'Korrigera verifikation' : 'Ny verifikation'}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 lg:overflow-y-auto lg:flex-1">
             <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
@@ -916,8 +1002,13 @@ function VoucherForm({
                 </span>
               </div>
               <Button type="submit" disabled={!isBalanced || mutation.isPending || !description} className="w-full sm:w-auto">
-                {mutation.isPending ? 'Sparar...' : 'Bokför'}
+                {mutation.isPending ? 'Sparar...' : correctionOfVoucherId ? 'Spara korrigering' : 'Bokför'}
               </Button>
+              {onCancel && (
+                <Button type="button" variant="ghost" onClick={onCancel} className="w-full sm:w-auto">
+                  Avbryt
+                </Button>
+              )}
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}

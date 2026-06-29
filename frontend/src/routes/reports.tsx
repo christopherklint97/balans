@@ -85,20 +85,20 @@ function IncomeStatementView({ fyId }: { fyId: string }) {
           <ISHeader current={data.current.fiscal_year} previous={data.previous?.fiscal_year} />
           <Separator className="my-2" />
           <ISRow label="Nettoomsättning" c={data.current.net_revenue} p={data.previous?.net_revenue} />
-          <ISRow label="Övriga rörelseintäkter" c={data.current.other_operating_income} p={data.previous?.other_operating_income} hide />
+          <ISRow label="Övriga rörelseintäkter" c={data.current.other_operating_income} p={data.previous?.other_operating_income} />
           <Separator className="my-1" />
-          <ISRow label="Råvaror och förnödenheter" c={neg(data.current.raw_materials)} p={data.previous ? neg(data.previous.raw_materials) : undefined} hide />
-          <ISRow label="Handelsvaror" c={neg(data.current.goods_for_resale)} p={data.previous ? neg(data.previous.goods_for_resale) : undefined} hide />
+          <ISRow label="Råvaror och förnödenheter" c={neg(data.current.raw_materials)} p={data.previous ? neg(data.previous.raw_materials) : undefined} />
+          <ISRow label="Handelsvaror" c={neg(data.current.goods_for_resale)} p={data.previous ? neg(data.previous.goods_for_resale) : undefined} />
           <ISRow label="Övriga externa kostnader" c={neg(data.current.other_external_costs)} p={data.previous ? neg(data.previous.other_external_costs) : undefined} />
           <ISRow label="Personalkostnader" c={neg(data.current.personnel_costs)} p={data.previous ? neg(data.previous.personnel_costs) : undefined} />
-          <ISRow label="Av- och nedskrivningar" c={neg(data.current.depreciation)} p={data.previous ? neg(data.previous.depreciation) : undefined} hide />
+          <ISRow label="Av- och nedskrivningar" c={neg(data.current.depreciation)} p={data.previous ? neg(data.previous.depreciation) : undefined} />
           <Separator className="my-1" />
           <ISRow label="Rörelseresultat" c={data.current.operating_result} p={data.previous?.operating_result} bold />
           <Separator className="my-1" />
-          <ISRow label="Finansiella intäkter" c={data.current.financial_income} p={data.previous?.financial_income} hide />
-          <ISRow label="Finansiella kostnader" c={neg(data.current.financial_costs)} p={data.previous ? neg(data.previous.financial_costs) : undefined} hide />
+          <ISRow label="Finansiella intäkter" c={data.current.financial_income} p={data.previous?.financial_income} />
+          <ISRow label="Finansiella kostnader" c={neg(data.current.financial_costs)} p={data.previous ? neg(data.previous.financial_costs) : undefined} />
           <ISRow label="Resultat efter finansiella poster" c={data.current.result_after_financial} p={data.previous?.result_after_financial} bold />
-          <ISRow label="Bokslutsdispositioner" c={data.current.appropriations} p={data.previous?.appropriations} hide />
+          <ISRow label="Bokslutsdispositioner" c={data.current.appropriations} p={data.previous?.appropriations} />
           <Separator className="my-1" />
           <ISRow label="Resultat före skatt" c={data.current.result_before_tax} p={data.previous?.result_before_tax} bold />
           <ISRow label="Skatt på årets resultat" c={neg(data.current.tax)} p={data.previous ? neg(data.previous.tax) : undefined} />
@@ -134,14 +134,15 @@ function BalanceSheetView({ fyId }: { fyId: string }) {
 
           <div className="font-semibold pt-1">TILLGÅNGAR</div>
           <div className="font-semibold text-muted-foreground text-xs pt-1">Anläggningstillgångar</div>
-          <ISRow label="  Immateriella" c={c.assets.intangible_assets} p={p?.assets.intangible_assets} hide />
-          <ISRow label="  Materiella" c={c.assets.tangible_assets} p={p?.assets.tangible_assets} hide />
-          <ISRow label="  Finansiella" c={c.assets.financial_fixed_assets} p={p?.assets.financial_fixed_assets} hide />
+          <ISRow label="  Immateriella" c={c.assets.intangible_assets} p={p?.assets.intangible_assets} />
+          <ISRow label="  Materiella" c={c.assets.tangible_assets} p={p?.assets.tangible_assets} />
+          <ISRow label="  Finansiella" c={c.assets.financial_fixed_assets} p={p?.assets.financial_fixed_assets} />
           <ISRow label="Summa anläggningstillgångar" c={c.assets.total_fixed_assets} p={p?.assets.total_fixed_assets} bold />
 
           <div className="font-semibold text-muted-foreground text-xs pt-1">Omsättningstillgångar</div>
-          <ISRow label="  Varulager" c={c.assets.inventory} p={p?.assets.inventory} hide />
+          <ISRow label="  Varulager" c={c.assets.inventory} p={p?.assets.inventory} />
           <ISRow label="  Kortfristiga fordringar" c={c.assets.current_receivables} p={p?.assets.current_receivables} />
+          <ISRow label="  Kortfristiga placeringar" c={c.assets.short_term_investments} p={p?.assets.short_term_investments} />
           <ISRow label="  Kassa och bank" c={c.assets.cash_and_bank} p={p?.assets.cash_and_bank} />
           <ISRow label="Summa omsättningstillgångar" c={c.assets.total_current_assets} p={p?.assets.total_current_assets} bold />
           <Separator className="my-1" />
@@ -154,8 +155,9 @@ function BalanceSheetView({ fyId }: { fyId: string }) {
           <ISRow label="  Bundet eget kapital" c={c.equity_and_liabilities.restricted_equity} p={p?.equity_and_liabilities.restricted_equity} />
           <ISRow label="  Fritt eget kapital" c={c.equity_and_liabilities.unrestricted_equity} p={p?.equity_and_liabilities.unrestricted_equity} />
           <ISRow label="Summa eget kapital" c={c.equity_and_liabilities.total_equity} p={p?.equity_and_liabilities.total_equity} bold />
-          <ISRow label="Obeskattade reserver" c={c.equity_and_liabilities.untaxed_reserves} p={p?.equity_and_liabilities.untaxed_reserves} hide />
-          <ISRow label="Långfristiga skulder" c={c.equity_and_liabilities.long_term_liabilities} p={p?.equity_and_liabilities.long_term_liabilities} hide />
+          <ISRow label="Obeskattade reserver" c={c.equity_and_liabilities.untaxed_reserves} p={p?.equity_and_liabilities.untaxed_reserves} />
+          <ISRow label="Avsättningar" c={c.equity_and_liabilities.provisions} p={p?.equity_and_liabilities.provisions} />
+          <ISRow label="Långfristiga skulder" c={c.equity_and_liabilities.long_term_liabilities} p={p?.equity_and_liabilities.long_term_liabilities} />
           <ISRow label="Kortfristiga skulder" c={c.equity_and_liabilities.current_liabilities} p={p?.equity_and_liabilities.current_liabilities} />
           <Separator className="my-1" />
           <ISRow label="SUMMA EGET KAPITAL OCH SKULDER" c={c.total_equity_and_liabilities} p={p?.total_equity_and_liabilities} bold />
@@ -382,15 +384,13 @@ function ISRow({
   c,
   p,
   bold,
-  hide,
 }: {
   label: string;
   c: string;
   p?: string;
   bold?: boolean;
-  hide?: boolean;
 }) {
-  if (hide && isZero(c) && (!p || isZero(p))) return null;
+  if (isZero(c) && (!p || isZero(p))) return null;
 
   return (
     <div className={`flex justify-between ${bold ? 'font-semibold' : ''}`}>

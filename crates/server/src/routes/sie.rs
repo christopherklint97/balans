@@ -270,6 +270,7 @@ async fn export_sie(
          FROM voucher_lines vl
          JOIN vouchers v ON vl.voucher_id = v.id
          WHERE v.fiscal_year_id = ?
+          AND v.is_voided = 0
          GROUP BY vl.account_number
          ORDER BY vl.account_number",
     )
@@ -300,7 +301,7 @@ async fn export_sie(
         SieType::Type4 => {
             // Fetch all vouchers with lines
             let vouchers = sqlx::query_as::<_, crate::models::voucher::Voucher>(
-                "SELECT * FROM vouchers WHERE fiscal_year_id = ? ORDER BY voucher_number",
+                "SELECT * FROM vouchers WHERE fiscal_year_id = ? AND is_voided = 0 ORDER BY voucher_number",
             )
             .bind(&fy_id)
             .fetch_all(&state.pool)

@@ -86,6 +86,7 @@ pub async fn validate_closing(
          FROM voucher_lines vl
          JOIN vouchers v ON vl.voucher_id = v.id
          WHERE v.fiscal_year_id = ?
+         AND v.is_voided = 0
          GROUP BY vl.account_number
          ORDER BY vl.account_number",
     )
@@ -95,7 +96,7 @@ pub async fn validate_closing(
 
     // Check: must have at least one voucher
     let voucher_count = sqlx::query_scalar::<_, i32>(
-        "SELECT COUNT(*) FROM vouchers WHERE fiscal_year_id = ? AND is_closing_entry = 0",
+        "SELECT COUNT(*) FROM vouchers WHERE fiscal_year_id = ? AND is_closing_entry = 0 AND is_voided = 0",
     )
     .bind(fiscal_year_id)
     .fetch_one(pool)
@@ -113,6 +114,7 @@ pub async fn validate_closing(
     let unbalanced = sqlx::query_scalar::<_, i32>(
         "SELECT COUNT(*) FROM vouchers v
          WHERE v.fiscal_year_id = ?
+         AND v.is_voided = 0
          AND (SELECT COALESCE(SUM(debit) - SUM(credit), 0) FROM voucher_lines WHERE voucher_id = v.id) != 0",
     )
     .bind(fiscal_year_id)

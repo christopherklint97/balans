@@ -99,6 +99,7 @@ async fn build_for_period(
          FROM voucher_lines vl
          JOIN vouchers v ON vl.voucher_id = v.id
          WHERE v.fiscal_year_id = ?
+           AND v.is_voided = 0
            AND (v.is_closing_entry = 0 OR vl.account_number = 8910)
          GROUP BY vl.account_number",
     )

@@ -269,7 +269,7 @@ pub fn generate_pdf(report: &AnnualReport) -> Result<Vec<u8>, String> {
     doc.push(Break::new(1.5));
     doc.push(Paragraph::new(format!(
         "{}, den _______________",
-        report.company.name
+        report.company.city.as_deref().unwrap_or("________________")
     )));
     doc.push(Break::new(2.5));
     doc.push(Paragraph::new("_________________________________").styled(bold));
@@ -365,6 +365,10 @@ fn push_stmt_row(
     previous: Option<Money>,
     bold_row: bool,
 ) {
+    if current.is_zero() && previous.map(|p| p.is_zero()).unwrap_or(true) {
+        return;
+    }
+
     let style = if bold_row { Style::new().bold() } else { Style::new() };
     let prev_str = previous.map(format_sek).unwrap_or_default();
     tbl.row()

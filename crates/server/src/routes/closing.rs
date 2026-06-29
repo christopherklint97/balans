@@ -85,14 +85,14 @@ async fn status_handler(
     .ok_or_else(|| AppError::NotFound(format!("Fiscal year {fy_id} not found")))?;
 
     let closing_voucher_count = sqlx::query_scalar::<_, i32>(
-        "SELECT COUNT(*) FROM vouchers WHERE fiscal_year_id = ? AND is_closing_entry = 1",
+        "SELECT COUNT(*) FROM vouchers WHERE fiscal_year_id = ? AND is_closing_entry = 1 AND is_voided = 0",
     )
     .bind(&fy_id)
     .fetch_one(&state.pool)
     .await?;
 
     let total_voucher_count = sqlx::query_scalar::<_, i32>(
-        "SELECT COUNT(*) FROM vouchers WHERE fiscal_year_id = ?",
+        "SELECT COUNT(*) FROM vouchers WHERE fiscal_year_id = ? AND is_voided = 0",
     )
     .bind(&fy_id)
     .fetch_one(&state.pool)

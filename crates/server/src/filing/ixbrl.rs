@@ -349,6 +349,10 @@ fn write_footer(doc: &mut String) {
 
 /// Write an income statement row with XBRL tagging.
 fn is_row(doc: &mut String, label: &str, xbrl_name: &str, current: Money, previous: Option<Money>, is_total: bool) {
+    if current.is_zero() && previous.map(|p| p.is_zero()).unwrap_or(true) {
+        return;
+    }
+
     let class = if is_total { "subtotal" } else { "" };
 
     write!(doc, r#"
@@ -371,6 +375,10 @@ fn is_row(doc: &mut String, label: &str, xbrl_name: &str, current: Money, previo
 
 /// Write a balance sheet row with XBRL tagging.
 fn bs_row(doc: &mut String, label: &str, xbrl_name: &str, current: Money, previous: Option<Money>, is_total: bool) {
+    if current.is_zero() && previous.map(|p| p.is_zero()).unwrap_or(true) {
+        return;
+    }
+
     let class = if is_total { "subtotal" } else { "" };
 
     write!(doc, r#"

@@ -64,6 +64,7 @@ async fn trial_balance(
          JOIN vouchers v ON vl.voucher_id = v.id
          JOIN accounts a ON vl.account_number = a.number AND a.company_id = v.company_id
          WHERE v.fiscal_year_id = ?
+           AND v.is_voided = 0
          GROUP BY vl.account_number, a.name
          ORDER BY vl.account_number",
     )

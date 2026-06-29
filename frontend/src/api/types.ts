@@ -94,6 +94,10 @@ export interface Voucher {
   date: string;
   description: string;
   is_closing_entry: boolean;
+  is_voided: boolean;
+  voided_at: string | null;
+  corrected_by_voucher_id: string | null;
+  corrects_voucher_id: string | null;
   created_at: string;
 }
 

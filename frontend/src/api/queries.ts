@@ -68,6 +68,8 @@ export const vouchersApi = {
   get: (id: string) => get<VoucherWithLines>(`/vouchers/${id}`),
   create: (fyId: string, data: CreateVoucher) =>
     post<VoucherWithLines>(`/fiscal-years/${fyId}/vouchers`, data),
+  correct: (id: string, data: CreateVoucher) =>
+    post<VoucherWithLines>(`/vouchers/${id}/corrections`, data),
   delete: (id: string) => del<{ deleted: boolean }>(`/vouchers/${id}`),
 };
 

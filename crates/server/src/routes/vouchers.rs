@@ -1,12 +1,12 @@
-use axum::{
-    extract::{Extension, Path, State},
-    routing::{get, post},
-    Json, Router,
-};
-use chrono::Utc;
 use crate::access::verify_fiscal_year_access;
 use crate::auth::middleware::AuthUser;
 use crate::config::AppState;
+use axum::{
+    Json, Router,
+    extract::{Extension, Path, State},
+    routing::{get, post},
+};
+use chrono::Utc;
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -20,6 +20,7 @@ pub fn routes() -> Router<AppState> {
             "/fiscal-years/{fy_id}/vouchers",
             post(create_voucher).get(list_vouchers),
         )
+        .route("/vouchers/{id}/corrections", post(correct_voucher))
         .route("/vouchers/{id}", get(get_voucher).delete(delete_voucher))
 }
 
@@ -178,7 +179,10 @@ async fn create_voucher(
         "voucher",
         &voucher_id,
         "create",
-        Some(&format!("#{} {} {}", next_number, input.date, input.description)),
+        Some(&format!(
+            "#{} {} {}",
+            next_number, input.date, input.description
+        )),
     )
     .await
     .ok();
@@ -194,6 +198,10 @@ async fn create_voucher(
             date: input.date,
             description: input.description,
             is_closing_entry: false,
+            is_voided: false,
+            voided_at: None,
+            corrected_by_voucher_id: None,
+            corrects_voucher_id: None,
             created_at: now,
         },
         lines,
@@ -239,6 +247,132 @@ async fn get_voucher(
     Ok(Json(VoucherWithLines { voucher, lines }))
 }
 
+async fn correct_voucher(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
+    Path(id): Path<String>,
+    Json(input): Json<CreateVoucher>,
+) -> Result<Json<VoucherWithLines>, AppError> {
+    let original = sqlx::query_as::<_, Voucher>("SELECT * FROM vouchers WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Voucher {id} not found")))?;
+
+    verify_fiscal_year_access(&state.pool, &auth.0.sub, &original.fiscal_year_id, "member").await?;
+
+    if original.is_voided {
+        return Err(AppError::Validation("Voucher is already struck out".into()));
+    }
+
+    let fy = sqlx::query_as::<_, crate::models::fiscal_year::FiscalYear>(
+        "SELECT * FROM fiscal_years WHERE id = ?",
+    )
+    .bind(&original.fiscal_year_id)
+    .fetch_one(&state.pool)
+    .await?;
+
+    if fy.is_closed {
+        return Err(AppError::FiscalYearClosed);
+    }
+
+    validate_voucher_input(&state.pool, &fy, &input).await?;
+
+    let mut tx = state.pool.begin().await?;
+    let next_number = sqlx::query_scalar::<_, i32>(
+        "SELECT COALESCE(MAX(voucher_number), 0) + 1 FROM vouchers WHERE fiscal_year_id = ?",
+    )
+    .bind(&original.fiscal_year_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let voucher_id = Uuid::new_v4().to_string();
+    let now = Utc::now().to_rfc3339();
+
+    sqlx::query(
+        "INSERT INTO vouchers (id, company_id, fiscal_year_id, voucher_number, date, description, is_closing_entry, is_voided, corrects_voucher_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)"
+    )
+    .bind(&voucher_id)
+    .bind(&fy.company_id)
+    .bind(&original.fiscal_year_id)
+    .bind(next_number)
+    .bind(&input.date)
+    .bind(&input.description)
+    .bind(&original.id)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    let mut lines = Vec::new();
+    for line in &input.lines {
+        let line_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO voucher_lines (id, voucher_id, account_number, debit, credit, description)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&line_id)
+        .bind(&voucher_id)
+        .bind(line.account_number)
+        .bind(line.debit)
+        .bind(line.credit)
+        .bind(&line.description)
+        .execute(&mut *tx)
+        .await?;
+
+        lines.push(VoucherLine {
+            id: line_id,
+            voucher_id: voucher_id.clone(),
+            account_number: line.account_number,
+            debit: line.debit,
+            credit: line.credit,
+            description: line.description.clone(),
+        });
+    }
+
+    sqlx::query(
+        "UPDATE vouchers SET is_voided = 1, voided_at = ?, corrected_by_voucher_id = ? WHERE id = ?",
+    )
+    .bind(&now)
+    .bind(&voucher_id)
+    .bind(&original.id)
+    .execute(&mut *tx)
+    .await?;
+
+    crate::db::audit::log_action_tx(
+        &mut tx,
+        "voucher",
+        &original.id,
+        "correct",
+        Some(&format!(
+            "#{} corrected by #{}",
+            original.voucher_number, next_number
+        )),
+    )
+    .await
+    .ok();
+
+    tx.commit().await?;
+
+    Ok(Json(VoucherWithLines {
+        voucher: Voucher {
+            id: voucher_id,
+            company_id: fy.company_id,
+            fiscal_year_id: original.fiscal_year_id,
+            voucher_number: next_number,
+            date: input.date,
+            description: input.description,
+            is_closing_entry: false,
+            is_voided: false,
+            voided_at: None,
+            corrected_by_voucher_id: None,
+            corrects_voucher_id: Some(original.id),
+            created_at: now,
+        },
+        lines,
+    }))
+}
+
 async fn delete_voucher(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthUser>,
@@ -264,11 +398,89 @@ async fn delete_voucher(
         return Err(AppError::FiscalYearClosed);
     }
 
-    // CASCADE will delete voucher_lines too
-    sqlx::query("DELETE FROM vouchers WHERE id = ?")
+    let now = Utc::now().to_rfc3339();
+    sqlx::query("UPDATE vouchers SET is_voided = 1, voided_at = ? WHERE id = ?")
+        .bind(&now)
         .bind(&id)
         .execute(&state.pool)
         .await?;
 
-    Ok(Json(serde_json::json!({ "deleted": true })))
+    Ok(Json(serde_json::json!({ "deleted": true, "voided": true })))
+}
+
+async fn validate_voucher_input(
+    pool: &sqlx::SqlitePool,
+    fy: &crate::models::fiscal_year::FiscalYear,
+    input: &CreateVoucher,
+) -> Result<(), AppError> {
+    if input.lines.len() < 2 {
+        return Err(AppError::Validation(
+            "A voucher must have at least 2 lines".into(),
+        ));
+    }
+
+    let voucher_date = chrono::NaiveDate::parse_from_str(&input.date, "%Y-%m-%d")
+        .map_err(|_| AppError::Validation("Invalid date format, use YYYY-MM-DD".into()))?;
+    let fy_start = chrono::NaiveDate::parse_from_str(&fy.start_date, "%Y-%m-%d")
+        .map_err(|_| AppError::Internal("Invalid fiscal year start date".into()))?;
+    let fy_end = chrono::NaiveDate::parse_from_str(&fy.end_date, "%Y-%m-%d")
+        .map_err(|_| AppError::Internal("Invalid fiscal year end date".into()))?;
+
+    if voucher_date < fy_start || voucher_date > fy_end {
+        return Err(AppError::Validation(format!(
+            "Voucher date {voucher_date} is outside fiscal year ({} to {})",
+            fy.start_date, fy.end_date
+        )));
+    }
+
+    for line in &input.lines {
+        if !validate_bas_account_number(line.account_number) {
+            return Err(AppError::Validation(format!(
+                "Invalid account number: {}",
+                line.account_number
+            )));
+        }
+
+        let exists = sqlx::query_scalar::<_, i32>(
+            "SELECT COUNT(*) FROM accounts WHERE company_id = ? AND number = ?",
+        )
+        .bind(&fy.company_id)
+        .bind(line.account_number)
+        .fetch_one(pool)
+        .await?;
+
+        if exists == 0 {
+            return Err(AppError::Validation(format!(
+                "Account {} not found for this company",
+                line.account_number
+            )));
+        }
+    }
+
+    let total_debit: Money = input.lines.iter().map(|l| l.debit).sum();
+    let total_credit: Money = input.lines.iter().map(|l| l.credit).sum();
+
+    if total_debit != total_credit {
+        return Err(AppError::UnbalancedVoucher {
+            debit: total_debit.to_string(),
+            credit: total_credit.to_string(),
+        });
+    }
+
+    for (i, line) in input.lines.iter().enumerate() {
+        if !line.debit.is_zero() && !line.credit.is_zero() {
+            return Err(AppError::Validation(format!(
+                "Line {} has both debit and credit. Each line should use only one.",
+                i + 1
+            )));
+        }
+        if line.debit.is_zero() && line.credit.is_zero() {
+            return Err(AppError::Validation(format!(
+                "Line {} has zero debit and credit.",
+                i + 1
+            )));
+        }
+    }
+
+    Ok(())
 }

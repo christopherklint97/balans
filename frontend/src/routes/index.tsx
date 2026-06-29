@@ -74,11 +74,17 @@ function CompanyCard({ company }: { company: Company }) {
   const [editName, setEditName] = useState(company.name);
   const [editOrgNumber, setEditOrgNumber] = useState(company.org_number);
   const [editCompanyForm, setEditCompanyForm] = useState(company.company_form);
+  const [editCity, setEditCity] = useState(company.city ?? '');
   const [editError, setEditError] = useState('');
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      companiesApi.update(company.id, { name: editName, org_number: editOrgNumber, company_form: editCompanyForm }),
+      companiesApi.update(company.id, {
+        name: editName,
+        org_number: editOrgNumber,
+        company_form: editCompanyForm,
+        city: editCity,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       setEditing(false);
@@ -130,12 +136,21 @@ function CompanyCard({ company }: { company: Company }) {
                 <option value="EK">Ekonomisk förening (EK)</option>
               </select>
             </div>
+            <div className="space-y-1">
+              <Label htmlFor={`edit-city-${company.id}`}>Säte</Label>
+              <Input
+                id={`edit-city-${company.id}`}
+                value={editCity}
+                onChange={(e) => setEditCity(e.target.value)}
+                placeholder="Stockholm"
+              />
+            </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}
             <div className="flex gap-2">
               <Button size="sm" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
                 {updateMutation.isPending ? 'Sparar...' : 'Spara'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setEditError(''); setEditName(company.name); setEditOrgNumber(company.org_number); setEditCompanyForm(company.company_form); }}>
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setEditError(''); setEditName(company.name); setEditOrgNumber(company.org_number); setEditCompanyForm(company.company_form); setEditCity(company.city ?? ''); }}>
                 Avbryt
               </Button>
             </div>
@@ -152,6 +167,7 @@ function CompanyCard({ company }: { company: Company }) {
               </div>
             </div>
             <p className="text-sm text-muted-foreground">{company.org_number}</p>
+            {company.city && <p className="text-sm text-muted-foreground">Säte: {company.city}</p>}
           </>
         )}
       </CardHeader>
@@ -261,6 +277,7 @@ function CreateCompanyForm({ onSuccess }: { onSuccess: () => void }) {
   const [name, setName] = useState('');
   const [orgNumber, setOrgNumber] = useState('');
   const [companyForm, setCompanyForm] = useState('AB');
+  const [city, setCity] = useState('');
   const [error, setError] = useState('');
 
   const mutation = useMutation({
@@ -269,6 +286,7 @@ function CreateCompanyForm({ onSuccess }: { onSuccess: () => void }) {
         name,
         org_number: orgNumber,
         company_form: companyForm,
+        city,
       }),
     onSuccess: async (company) => {
       // Auto-create a fiscal year for the current calendar year
@@ -332,6 +350,15 @@ function CreateCompanyForm({ onSuccess }: { onSuccess: () => void }) {
               <option value="KB">Kommanditbolag (KB)</option>
               <option value="EK">Ekonomisk förening (EK)</option>
             </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="city">Säte</Label>
+            <Input
+              id="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Stockholm"
+            />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" disabled={mutation.isPending}>

@@ -40,7 +40,7 @@ pub struct Assets {
 #[derive(Debug, Clone, Serialize)]
 pub struct EquityAndLiabilities {
     // Eget kapital (Equity)
-    pub restricted_equity: Money,   // 2010-2019 (aktiekapital, reservfond)
+    pub restricted_equity: Money, // 2010-2019 (aktiekapital, reservfond)
     pub unrestricted_equity: Money, // 2080-2099 (balanserat resultat, årets resultat)
     pub total_equity: Money,
 
@@ -99,6 +99,7 @@ async fn build_for_period(
          FROM voucher_lines vl
          JOIN vouchers v ON vl.voucher_id = v.id
          WHERE v.fiscal_year_id = ?
+           AND v.is_voided = 0
          GROUP BY vl.account_number",
     )
     .bind(fiscal_year_id)
@@ -133,7 +134,8 @@ async fn build_for_period(
     let current_receivables = net_debit(1500, 1799);
     let short_term_investments = net_debit(1800, 1899);
     let cash_and_bank = net_debit(1900, 1999);
-    let total_current_assets = inventory + current_receivables + short_term_investments + cash_and_bank;
+    let total_current_assets =
+        inventory + current_receivables + short_term_investments + cash_and_bank;
 
     let total_assets = total_fixed_assets + total_current_assets;
 

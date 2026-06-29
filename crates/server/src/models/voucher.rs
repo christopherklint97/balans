@@ -12,6 +12,10 @@ pub struct Voucher {
     pub date: String,
     pub description: String,
     pub is_closing_entry: bool,
+    pub is_voided: bool,
+    pub voided_at: Option<String>,
+    pub corrected_by_voucher_id: Option<String>,
+    pub corrects_voucher_id: Option<String>,
     pub created_at: String,
 }
 
